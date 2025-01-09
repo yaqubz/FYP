@@ -1,0 +1,29 @@
+{
+    "README": "JSON stores current waypoint and distance + angle to NEXT waypoint i.e. final waypoint is when dist_cm = angle_deg = 0!",
+    "wp": [
+        {
+            "dist_cm": 600,
+            "dist_px": 240,
+            "angle_deg": 0.0,
+            "position_cm": {
+                "x": 1000,
+                "y": 200
+            }
+        },
+        {
+            "dist_cm": 0,
+            "dist_px": 0,
+            "angle_deg": 0,
+            "position_cm": {
+                "x": 1000,
+                "y": 800
+            }
+        }
+    ],
+    "test_area": {
+        "width_cm": 2000,
+        "height_cm": 2000,
+        "scale_factor": 2.5
+    },
+    "competition_notice": "This path was planned in a test area. Scale adjustments needed for 20m x 20m competition field."
+}
