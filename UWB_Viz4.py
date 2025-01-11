@@ -27,6 +27,7 @@ from UWB_ReadUDP import get_all_positions, get_target_position
 import threading
 from queue import Queue
 import copy
+import json
 
 # Initialize Pygame
 pygame.init()
@@ -43,6 +44,9 @@ MAX_HISTORY = 50
 BGPIC = "resources/field2025_toscale.PNG"
 TRACE_FADE_TIME = 10
 RECT_WIDTH, RECT_HEIGHT = 20, 20
+
+BLUE = (0, 0, 255)
+RED = (255, 0, 0)
 
 # Predefined colors (20 distinct colors that are dark enough to read against white)
 TAG_COLORS = [
@@ -222,8 +226,63 @@ def data_collection_thread():
             print(f"Error reading data: {e}")
         time.sleep(0.01)  # Small sleep to prevent excessive CPU usage
 
+path_wp = []  # Store waypoints
+waypoints_world = []  # Store waypoints in meters
+
+def load_waypoints_from_json(json_filename):
+    """
+    Load waypoints from a JSON file and store in world coordinates (meters).
+    """
+    try:
+        with open(json_filename, 'r') as f:
+            data = json.load(f)
+            waypoints = data.get("wp", [])
+            print("Waypoints loaded from JSON file:", waypoints)
+            
+            # Store waypoints in world coordinates (meters)
+            world_coords = []
+            for point in waypoints:
+                x_cm = point['position_cm']['x']
+                y_cm = point['position_cm']['y']
+                # Convert from cm to meters for UWB coordinates
+                x_m = x_cm / 100
+                y_m = y_cm / 100
+                world_coords.append((x_m, y_m))
+            
+            print("Converted waypoints (meters):", world_coords)
+            return world_coords
+            
+    except FileNotFoundError:
+        print(f"File {json_filename} not found.")
+        return []
+    except json.JSONDecodeError as e:
+        print(f"Error decoding JSON: {e}")
+        return []
+    except KeyError as e:
+        print(f"Error accessing JSON data: {e}")
+        return []
+
+def draw_waypoints(surface):
+    """Draw waypoints and connecting lines, converting from world to screen coordinates each frame."""
+    if not waypoints_world:
+        return
+        
+    # Convert world coordinates to screen coordinates
+    screen_coords = []
+    print(waypoints_world)
+    for x_m, y_m in waypoints_world:
+        screen_x, screen_y = screen_coordinates(x_m, y_m)
+        screen_coords.append((screen_x, screen_y))
+    
+    # Draw waypoints and connecting lines
+    for i, waypoint in enumerate(screen_coords):
+        pygame.draw.circle(surface, BLUE, waypoint, 5)
+        if i > 0:  # Draw line connecting to previous waypoint
+            pygame.draw.line(surface, RED, screen_coords[i-1], waypoint, 2)
+
+
 def main():
-    global panning, last_mouse_pos, offset_x, offset_y, persistent_trails, controls_enabled
+    global panning, last_mouse_pos, offset_x, offset_y, persistent_trails, controls_enabled, waypoints_world
     
     # Start data collection thread
     data_thread = threading.Thread(target=data_collection_thread, daemon=True)
@@ -233,7 +292,7 @@ def main():
     background = Background(BGPIC)
     
     print_status()
-    print("[INFO] Press ESC to exit, SPACE for trails, ENTER for controls")
+    print("[INFO] Press ESC to exit, SPACE for trails, ENTER for controls, L to load waypoints")
     
     while True:
         for event in pygame.event.get():
@@ -268,12 +327,19 @@ def main():
                     if not controls_enabled:
                         panning = False
                     print_status()
+                elif event.key == pygame.K_l:  # Load waypoints with 'L' key
+                    waypoints_world = load_waypoints_from_json("waypoint20x20.json")
+                    if waypoints_world:
+                        print("Waypoints loaded successfully.")
         
         # Draw frame
         screen.fill(BACKGROUND_COLOR)
         background.draw(screen)
         draw_grid()
         draw_rectangle(RECT_WIDTH, RECT_HEIGHT)
+        
+        # Draw waypoints (now updates with pan/zoom)
+        draw_waypoints(screen)
         
         # Get latest positions data thread-safely
         with data_lock:
