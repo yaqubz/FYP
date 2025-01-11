@@ -15,7 +15,7 @@ Note on UDP:
     
 ISSUES/TODO:
     1. Does not load/update when there is no UWB info (resolved caa 11 Jan)
-    2. Load waypoints from json on the map (TODO 8 Jan)
+    2. Load waypoints from json on the map (resolved caa 11 Jan)
 """
 
 import pygame
@@ -42,6 +42,7 @@ FONT_SIZE = 30
 INITIAL_SCALE = 40
 MAX_HISTORY = 50
 BGPIC = "resources/field2025_toscale.PNG"
+JSON_READ = "waypoint20x20.json"
 TRACE_FADE_TIME = 10
 RECT_WIDTH, RECT_HEIGHT = 20, 20
 
@@ -328,7 +329,7 @@ def main():
                         panning = False
                     print_status()
                 elif event.key == pygame.K_l:  # Load waypoints with 'L' key
-                    waypoints_world = load_waypoints_from_json("waypoint20x20.json")
+                    waypoints_world = load_waypoints_from_json(JSON_READ)
                     if waypoints_world:
                         print("Waypoints loaded successfully.")
         
