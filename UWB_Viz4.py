@@ -1,3 +1,23 @@
+# WORKS WELL 8 JAN - SOURCE: Claude
+
+"""
+GUI to display live position of all UWB tags in the arena. 
+
+This code requires:
+    1. nlink_unpack_COMx_udp.exe to be running on any other device connected to the same network
+        - This other device (Windows PC) is connected via USB to the LinkTrack Console and will transmit via UDP
+        - nlink_unpack_COMx_udp.exe 's source file is main_udp.c
+    2. UWB_ReadUDP.py custom library
+
+Note on UDP:
+    Using NTUSecure or RMTT/Tello WiFi is okay for transferring data within the same PC via UDP. However, it will not allow UDP transfer across devices.
+
+    
+ISSUES/TODO:
+    1. Does not load/update when there is no UWB info (resolved caa 11 Jan)
+    2. Load waypoints from json on the map (TODO 8 Jan)
+"""
+
 import pygame
 import pandas as pd
 import time
