@@ -1,36 +1,18 @@
-# WORKS WELL 8 JAN - SOURCE: Claude
-
-"""
-GUI to display live position of all UWB tags in the arena. 
-
-This code requires:
-    1. nlink_unpack_COMx_udp.exe to be running on any other device connected to the same network
-        - This other device (Windows PC) is connected via USB to the LinkTrack Console and will transmit via UDP
-        - nlink_unpack_COMx_udp.exe 's source file is main_udp.c
-    2. UWB_ReadUDP.py custom library
-
-Note on UDP:
-    Using NTUSecure or RMTT/Tello WiFi is okay for transferring data within the same PC via UDP. However, it will not allow UDP transfer across devices.
-
-    
-ISSUES/TODO:
-    1. Does not load/update when there is no UWB info (resolved caa 8 Jan)
-    2. Load waypoints from json on the map (TODO 8 Jan)
-"""
-
-
 import pygame
 import pandas as pd
 import time
 import sys
 from collections import defaultdict
 from UWB_ReadUDP import get_all_positions, get_target_position
+import threading
+from queue import Queue
+import copy
 
 # Initialize Pygame
 pygame.init()
 
 # Constants
-SCREEN_WIDTH,SCREEN_HEIGHT = 1000, 800
+SCREEN_WIDTH, SCREEN_HEIGHT = 1000, 800
 BACKGROUND_COLOR = (255, 255, 255)  # White
 GRID_COLOR = (200, 200, 200)       # Lighter gray for better visibility on white
 LABEL_COLOR = (100, 100, 100)      # Darker gray for better visibility on white
@@ -74,8 +56,12 @@ offset_x = 0
 offset_y = 0
 panning = False
 last_mouse_pos = None
-persistent_trails = False  # For trail persistence
-controls_enabled = True   # For zoom and pan controls
+persistent_trails = False
+controls_enabled = True
+
+# Thread-safe data structure
+latest_positions_data = None
+data_lock = threading.Lock()
 
 # Set up the display
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -84,7 +70,6 @@ pygame.display.set_caption("UWB Position Visualization")
 class Background:
     def __init__(self, image_path):
         try:
-            # Load original image and store it
             self.original_image = pygame.image.load(image_path)
             print("Background image loaded successfully")
         except Exception as e:
@@ -93,37 +78,26 @@ class Background:
             self.original_image.fill(BACKGROUND_COLOR)
 
     def draw(self, surface):
-        # Calculate the size that will fit the 20x20 grid
         scaled_width = RECT_WIDTH * scale_factor
         scaled_height = RECT_HEIGHT * scale_factor
-        
-        # Scale the image to fit exactly in the 20x20 grid
         scaled_image = pygame.transform.scale(self.original_image, (scaled_width, scaled_height))
-        
-        # Get the screen coordinates for (0,0)
-        pos_x, pos_y = screen_coordinates(0, RECT_HEIGHT)  # Use RECT_HEIGHT for Y to flip the image right-side up
-        
-        # Draw the scaled and positioned image
+        pos_x, pos_y = screen_coordinates(0, RECT_HEIGHT)
         surface.blit(scaled_image, (pos_x, pos_y))
 
 def generate_color(tag_id):
-    """Assign a color from the predefined list based on tag_id."""
     return TAG_COLORS[int(tag_id) % len(TAG_COLORS)]
 
 def screen_coordinates(x, y):
-    """Convert UWB coordinates to screen coordinates."""
     screen_x = SCREEN_WIDTH // 2 + (x * scale_factor) + offset_x
     screen_y = SCREEN_HEIGHT // 2 - (y * scale_factor) + offset_y
     return int(screen_x), int(screen_y)
 
 def uwb_coordinates(screen_x, screen_y):
-    """Convert screen coordinates to UWB coordinates."""
     x = ((screen_x - SCREEN_WIDTH // 2 - offset_x) / scale_factor)
     y = ((SCREEN_HEIGHT // 2 - screen_y + offset_y) / scale_factor)
     return x, y
 
 def draw_grid():
-    """Draw a grid with 0,0 at the center and measurements."""
     start_x, start_y = uwb_coordinates(0, SCREEN_HEIGHT)
     end_x, end_y = uwb_coordinates(SCREEN_WIDTH, 0)
     font = pygame.font.Font(None, 20)
@@ -151,7 +125,6 @@ def draw_grid():
     screen.blit(origin_label, (origin_x + 5, origin_y + 5))
 
 def draw_rectangle(width, height):
-    """Draw a rectangle starting at (0, 0)."""
     rect_color = (255, 0, 0)  # Red
     x1, y1 = screen_coordinates(0, 0)
     x2, y2 = screen_coordinates(width, 0)
@@ -160,7 +133,6 @@ def draw_rectangle(width, height):
     pygame.draw.polygon(screen, rect_color, [(x1, y1), (x2, y2), (x3, y3), (x4, y4)], 2)
 
 def draw_positions(positions_df):
-    """Draw all UWB positions and their trails on the screen."""
     current_time = time.time()
 
     for _, row in positions_df.iterrows():
@@ -177,7 +149,6 @@ def draw_positions(positions_df):
         for i in range(len(positions)):
             timestamp, x, y = positions[i]
             
-            # If trails are persistent, draw all points at full opacity
             if persistent_trails:
                 alpha = 255
             else:
@@ -201,7 +172,6 @@ def draw_positions(positions_df):
         screen.blit(label, (screen_x + 10, screen_y - 10))
 
 def handle_mouse_wheel(y):
-    """Handle mouse wheel zoom with cursor as zoom center."""
     if not controls_enabled:
         return
         
@@ -215,17 +185,33 @@ def handle_mouse_wheel(y):
     offset_y += (mouse_y - new_screen_y)
 
 def print_status():
-    """Print current status of controls and trails."""
     controls_status = "ENABLED" if controls_enabled else "DISABLED"
     trails_status = "PERSISTENT" if persistent_trails else "FADING"
     print(f"[INFO] Controls: {controls_status} | Trails: {trails_status}")
 
+def data_collection_thread():
+    """Thread function to continuously collect UWB position data."""
+    global latest_positions_data
+    while True:
+        try:
+            df = get_all_positions()
+            if not df.empty:
+                with data_lock:
+                    latest_positions_data = df.groupby('id').last().reset_index()
+        except Exception as e:
+            print(f"Error reading data: {e}")
+        time.sleep(0.01)  # Small sleep to prevent excessive CPU usage
+
 def main():
     global panning, last_mouse_pos, offset_x, offset_y, persistent_trails, controls_enabled
+    
+    # Start data collection thread
+    data_thread = threading.Thread(target=data_collection_thread, daemon=True)
+    data_thread.start()
+    
     clock = pygame.time.Clock()
     background = Background(BGPIC)
     
-    # Print initial status
     print_status()
     print("[INFO] Press ESC to exit, SPACE for trails, ENTER for controls")
     
@@ -260,25 +246,24 @@ def main():
                 elif event.key == pygame.K_RETURN:
                     controls_enabled = not controls_enabled
                     if not controls_enabled:
-                        panning = False  # Stop any ongoing panning
+                        panning = False
                     print_status()
         
-        try:
-            df = get_all_positions()        # GUI will run but much slower when df is empty 
-            screen.fill(BACKGROUND_COLOR)
-            background.draw(screen)
-            draw_grid()
-            draw_rectangle(RECT_WIDTH, RECT_HEIGHT)
-            if df.empty is False:
-                latest_positions = df.groupby('id').last().reset_index()
-                draw_positions(latest_positions)
-            
-            pygame.display.update()
-            
-        except Exception as e:
-            print(f"Error reading data: {e}")
+        # Draw frame
+        screen.fill(BACKGROUND_COLOR)
+        background.draw(screen)
+        draw_grid()
+        draw_rectangle(RECT_WIDTH, RECT_HEIGHT)
         
-        clock.tick(30)
+        # Get latest positions data thread-safely
+        with data_lock:
+            current_positions = copy.deepcopy(latest_positions_data) if latest_positions_data is not None else None
+        
+        if current_positions is not None:
+            draw_positions(current_positions)
+        
+        pygame.display.update()
+        clock.tick(30)  # Maintain 30 FPS
 
 if __name__ == "__main__":
     main()
