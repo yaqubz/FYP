@@ -10,11 +10,10 @@ This package provides a solution for waypoint generation, UWB tag positioning, a
 
 To start the system from the main directory, simply run the batch file `main_run_sequence.bat` located in the `.\launch` directory. This will automatically run the processes in sequence:
 
-1. **Start the system**: Initialize the processes.
-2. **PPGUI**: Opens the GUI to create and save the waypoint JSON file.
-3. **Run `.exe`**: Prompts you to connect to the UWB console by selecting the correct COM port.
-4. **Start UWB_Viz**: Displays the map and the positions of the UWB tags.
-5. **Run PPFLY**: Executes the saved waypoint JSON for flight control.
+1. **Run PPGUI**: Opens the GUI to create and save the waypoint JSON file.
+2. **Run `.exe`**: Prompts you to connect to the UWB console by selecting the correct COM port. If connected successfully, it will run in the background.
+3. **Run UWB_Viz**: Displays the map and the positions of the UWB tags.
+4. **Run PPFLY**: Executes the saved waypoint JSON for flight control.
 
 **Note**: This package should work out-of-the-box for Windows users, as long as the required `.exe` file is available and Windows-based dependencies are met.
 
