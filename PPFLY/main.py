@@ -10,7 +10,7 @@ from djitellopy import Tello
 from utils import *
 from constants import *
 
-import json, math, time, sys
+import json, math, time, sys, argparse
 from pathlib import Path
 
 # Add workspace root to sys.path (9 Jan: Works but might need a better solution)
@@ -18,6 +18,13 @@ workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
 
 from UWB_ReadUDP import get_target_position # own custom library
+
+def parse_args():
+    parser = argparse.ArgumentParser(description='Execute waypoints for Tello drone')
+    parser.add_argument('--simulate', 
+                       action='store_true',
+                       help='Run in simulation mode')
+    return parser.parse_args()
 
 def execute_waypoints(json_filename, simulate = False):
     global LAND_ID, FLYING_STATE, waypoints
@@ -166,8 +173,13 @@ def execute_waypoints(json_filename, simulate = False):
             json.dump(waypoints, f, indent=4)
 
 if __name__ == "__main__":
+    args = parse_args()
+    
+    SIMULATE = args.simulate    # Override SIMULATE from constants.py with command line argument
+    
     if validate_waypoints(INPUT_JSON):
-        print("Waypoints validated. Starting execution...")
-        execute_waypoints(INPUT_JSON, SIMULATE)  # IMPT: set SIMULATE = True/False as necessary
+        print(f"Waypoints validated. Starting execution in {'simulation' if SIMULATE else 'real'} mode...")
+        time.sleep(2)
+        execute_waypoints(INPUT_JSON, SIMULATE)
     else:
         print("Validation failed. Please check warnings above. Exiting program.")

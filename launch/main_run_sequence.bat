@@ -30,8 +30,8 @@ if %ERRORLEVEL% NEQ 0 (
 @REM Wait 3 seconds before starting the flight routine
 timeout /t 3 /nobreak
 
-@REM Run PPFLY/main.py for the flight routine
-python3 PPFLY/main.py
+@REM Run PPFLY/main.py for the flight routine (add --simulate flag if needed)
+python3 PPFLY/main.py --simulate
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] PPFLY/main.py encountered an error.
 )
