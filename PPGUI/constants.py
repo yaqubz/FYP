@@ -4,7 +4,8 @@ EVERYTHING HERE CAN BE ADJUSTED!
 """
 
 # Scaling Coeffs
-ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space
+# ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space
+ACTUAL_HEIGHT, ACTUAL_WIDTH = 600, 600  # cm of actual space
 WIDTH_HEIGHT_RATIO = ACTUAL_WIDTH/ACTUAL_HEIGHT
 
 SCREEN_HEIGHT = 800     # pixels on screen
