@@ -1,9 +1,8 @@
-## WORKS 17 Jan: Connects to Tello via RPi, and after setting up port forwarding, will stream a video via FFMPEG
-## (see Tab 2 in https://docs.google.com/document/d/1KmyQqbMvM87TkZBuy-VgEdIVLpgY043QIXMpsIDNSzA/edit?usp=sharing)
-## For video stream, run: ffplay -f h264 udp://127.0.0.1:11111
+## WORKS 17 Jan: Connects to Tello via RPi, and after setting up port forwarding, will stream a video via CV2
+## Color grading is off, need to edit params (TBC)
 
 from djitellopy import Tello
-import time
+import cv2, time
 
 # Define configuration constants
 NETWORK_CONFIG = {
@@ -33,20 +32,24 @@ class CustomTello(Tello):
         # Override video port
         self.vs_udp_port = self.VS_UDP_PORT
 
+
+
 def main():
     # Use the centralized network configuration
-    controller = CustomTello(NETWORK_CONFIG)
-    controller.connect()
-    time.sleep(5)
+    tello = CustomTello(NETWORK_CONFIG)
+    tello.connect()
+    print(tello.get_battery())
+    tello.send_command_with_return("downvision 0")
+    tello.streamon()
+    while True:
+        frame = tello.get_frame_read().frame
+        # img = cv2.resize(frame,(360,240))       # reduce size to reduce latency
+        img = cv2.resize(frame,(648,488))
+        cv2.imshow('Tello Forward Cam', img)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            break
     
-    print(f"Battery Level: {controller.get_battery()}%")
-
-    
-    controller.streamon()
-    time.sleep(5)
-    # controller.takeoff()
-    # controller.land()
-    controller.end() 
+    tello.end() 
 
 
 
