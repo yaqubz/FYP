@@ -5,8 +5,15 @@ from djitellopy import Tello
 import cv2, time
 
 # Define configuration constants
+# NETWORK_CONFIG = {
+#     'host': '192.168.0.117',
+#     'control_port': 8889,
+#     'state_port': 8890,
+#     'video_port': 11111
+# }
+
 NETWORK_CONFIG = {
-    'host': '192.168.0.117',
+    'host': '192.168.10.1',
     'control_port': 8889,
     'state_port': 8890,
     'video_port': 11111
