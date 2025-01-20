@@ -15,7 +15,8 @@ np.set_printoptions(legacy='1.25')
 
 class CustomTello(Tello):
     def __init__(self, 
-                 host='192.168.0.117',  # First drone's IP
+                 host='192.168.0.117',  # Drone's IP (if connected via RPi_17)
+                #  host='192.168.10.1',  # Drone's IP (if connected directly)
                  control_port=8889,      # Keep standard Tello port
                  state_port=8890,        
                  video_port=11111):       # Unique video port
@@ -60,7 +61,7 @@ FLYING_STATE = False
 waypoints = []  # to store executed waypoints and drone's current position
 
 # Load camera calibration data
-calib_data_path = "../search/calib_data/MultiMatrix.npz"
+calib_data_path = "./Search/calib_data/MultiMatrix.npz"
 calib_data = np.load(calib_data_path)
 cam_mat = calib_data["camMatrix"]
 dist_coef = calib_data["distCoef"]
@@ -201,7 +202,7 @@ def stream_video(drone):
                 
                 # print(ids, "  ", corners)
 
-        #cv2.imshow("frame", frame)
+        cv2.imshow("frame", frame)      # IMPT: UNCOMENT this for streaming!!
     
         # Check if streaming readiness hasn't been signaled yet
         if not stream_ready.is_set():
@@ -660,9 +661,11 @@ def main():
         print("Waiting for video stream to initialize...")
         stream_ready.wait()
         
-        # Execute flight routine
+        # # Execute flight routine
         print("Starting flight routine...")
         flight_routine(drone)
+        # print("60 seconds countdown")
+        # time.sleep(60)
         
     except Exception as e:
         print(f"Error in main: {e}")
