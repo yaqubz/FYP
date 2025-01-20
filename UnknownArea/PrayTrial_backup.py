@@ -150,8 +150,8 @@ def navigation_thread(controller):
     cv2.namedWindow("Drone Navigation", cv2.WINDOW_NORMAL)
     
     # Ensure frame reader is initialized
-    frame_reader = controller.drone.get_frame_read()
-    time.sleep(2)  # Give time for camera to initialize
+    frame_reader = controller.drone.get_frame_read()    # 15 Jan problem is here????
+    time.sleep(5)  # Give time for camera to initialize
     
     # Initial movement
     print("Moving to initial altitude...")
@@ -197,87 +197,89 @@ def navigation_thread(controller):
             
             # Get depth map
             depth_colormap = controller.process_depth_map(frame)
+
+            marker_found = False
             
-            # Check for markers
-            marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame)
-            if marker_found:
-                # Draw marker detection and pose information
-                marker_center = np.mean(corners[0], axis=0)
-                cv2.circle(display_frame, 
-                          (int(marker_center[0]), int(marker_center[1])), 
-                          10, (0, 255, 0), -1)
-                cv2.polylines(display_frame, 
-                            [corners[0].astype(np.int32)], 
-                            True, (0, 255, 0), 2)
-                cv2.putText(display_frame, 
-                          f"ID: {marker_id}", 
-                          (int(marker_center[0]), int(marker_center[1] - 20)),
-                          cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            # # Check for markers
+            # marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame)
+            # if marker_found:
+            #     # Draw marker detection and pose information
+            #     marker_center = np.mean(corners[0], axis=0)
+            #     cv2.circle(display_frame, 
+            #               (int(marker_center[0]), int(marker_center[1])), 
+            #               10, (0, 255, 0), -1)
+            #     cv2.polylines(display_frame, 
+            #                 [corners[0].astype(np.int32)], 
+            #                 True, (0, 255, 0), 2)
+            #     cv2.putText(display_frame, 
+            #               f"ID: {marker_id}", 
+            #               (int(marker_center[0]), int(marker_center[1] - 20)),
+            #               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 
-                # Draw pose estimation
-                display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
+            #     # Draw pose estimation
+            #     display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
                 
-                print(f"Valid marker {marker_id} detected! Switching to approach sequence...")
+            #     print(f"Valid marker {marker_id} detected! Switching to approach sequence...")
                 
-                # Center on the marker
-                frame_center = frame.shape[1] / 2
-                x_error = marker_center[0] - frame_center
+            #     # Center on the marker
+            #     frame_center = frame.shape[1] / 2
+            #     x_error = marker_center[0] - frame_center
                 
-                # Centering threshold
-                centering_threshold = 30
+            #     # Centering threshold
+            #     centering_threshold = 30
                 
-                if not centering_complete:
-                    if abs(x_error) > centering_threshold:
-                        # Calculate yaw speed based on error
-                        yaw_speed = int(np.clip(x_error / 10, -20, 20))
-                        controller.drone.send_rc_control(0, 0, 0, yaw_speed)
-                        print(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
-                    else:
-                        print("Marker centered! Starting approach...")
-                        controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
-                        time.sleep(1)  # Stabilize
-                        centering_complete = True
-                        approach_start_time = time.time()
+            #     if not centering_complete:
+            #         if abs(x_error) > centering_threshold:
+            #             # Calculate yaw speed based on error
+            #             yaw_speed = int(np.clip(x_error / 10, -20, 20))
+            #             controller.drone.send_rc_control(0, 0, 0, yaw_speed)
+            #             print(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
+            #         else:
+            #             print("Marker centered! Starting approach...")
+            #             controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
+            #             time.sleep(1)  # Stabilize
+            #             centering_complete = True
+            #             approach_start_time = time.time()
                 
-                elif not approach_complete:
-                    current_distance = controller.get_distance()
-                    if current_distance is None:
-                        print("Lost marker distance during approach...")
-                        time.sleep(0.1)
-                        continue
+            #     elif not approach_complete:
+            #         current_distance = controller.get_distance()
+            #         if current_distance is None:
+            #             print("Lost marker distance during approach...")
+            #             time.sleep(0.1)
+            #             continue
                         
-                    print(f"Current distance to marker: {current_distance:.1f}cm")
+            #         print(f"Current distance to marker: {current_distance:.1f}cm")
                     
-                    # Define safe approach distance (60cm from marker)
-                    safe_distance = max(int(current_distance - 50), 0)  # Keep 60cm safety margin
+            #         # Define safe approach distance (60cm from marker)
+            #         safe_distance = max(int(current_distance - 50), 0)  # Keep 60cm safety margin
                     
-                    if safe_distance > 0:
-                        print(f"Moving forward {safe_distance}cm to approach marker...")
-                        controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
-                        time.sleep(1)  # Stabilize
-                        controller.drone.move_forward(safe_distance)  # Move exact distance
-                        time.sleep(2)  # Wait for movement to complete
+            #         if safe_distance > 0:
+            #             print(f"Moving forward {safe_distance}cm to approach marker...")
+            #             controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
+            #             time.sleep(1)  # Stabilize
+            #             controller.drone.move_forward(safe_distance)  # Move exact distance
+            #             time.sleep(2)  # Wait for movement to complete
                         
-                        # Verify new position
-                        new_distance = controller.get_distance()
-                        if new_distance is not None:
-                            print(f"New distance to marker: {new_distance:.1f}cm")
+            #             # Verify new position
+            #             new_distance = controller.get_distance()
+            #             if new_distance is not None:
+            #                 print(f"New distance to marker: {new_distance:.1f}cm")
                     
-                    print("Approach complete!")
-                    controller.drone.send_rc_control(0, 0, 0, 0)
-                    approach_complete = True
-                    time.sleep(1)
-                    controller.drone.land()
+            #         print("Approach complete!")
+            #         controller.drone.send_rc_control(0, 0, 0, 0)
+            #         approach_complete = True
+            #         time.sleep(1)
+            #         controller.drone.land()
                 
-                else:  # Both centering and approach are complete
-                    print("Landing sequence initiated...")
-                    controller.drone.land()
-                    print("Cleaning up navigation thread after successful marker landing...")
-                    controller.drone.send_rc_control(0, 0, 0, 0)
-                    cv2.destroyAllWindows()
-                    cv2.waitKey(1)
-                    time.sleep(0.5)
-                    break
+            #     else:  # Both centering and approach are complete
+            #         print("Landing sequence initiated...")
+            #         controller.drone.land()
+            #         print("Cleaning up navigation thread after successful marker landing...")
+            #         controller.drone.send_rc_control(0, 0, 0, 0)
+            #         cv2.destroyAllWindows()
+            #         cv2.waitKey(1)
+            #         time.sleep(0.5)
+            #         break
             
             # Split depth map into regions for navigation
             h, w = depth_colormap.shape[:2]
