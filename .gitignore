@@ -42,3 +42,7 @@ waypoints_commanded.json
 # Ignore other files that don't need version control
 *.log
 *.tmp
+
+# CUSTOM: Ignore JSONs and Diagnostics/ Folder
+Diagnostics/
+*.json
