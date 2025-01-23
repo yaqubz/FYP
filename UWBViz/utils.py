@@ -37,8 +37,13 @@ class CoordinateSystem:
         return x, y
 
 def load_waypoints(json_filename):
+    """
+    Only loads all the waypoints if the LAST waypoint is provided (i.e. distance,angle = 0,0)
+    """
+    filename = input("Enter JSON filename to load (without .json extension): ")
+    filename = json_filename if filename == "" else f"{filename}.json"
     try:
-        with open(json_filename, 'r') as f:
+        with open(filename, 'r') as f:
             data = json.load(f)
             waypoints = data.get("wp", [])
             return [(point['position_cm']['x'] / 100, point['position_cm']['y'] / 100) 
@@ -138,3 +143,27 @@ class Visualization:
                 pygame.draw.circle(self.screen, color, (screen_x, screen_y), POINT_RADIUS)
                 label = font.render(f"#{int(tag_id)} ({x:.1f}, {y:.1f})", True, color)
                 self.screen.blit(label, (screen_x + 10, screen_y - 10))
+
+    def draw_marked_positions(self, marked_positions):
+        # Draw victims as green triangles
+        for victim in marked_positions['victims']:
+            screen_x, screen_y = self.coord_system.screen_coordinates(victim['x'], victim['y'])
+            pygame.draw.polygon(self.screen, (0, 255, 0), [
+                (screen_x, screen_y - 10),
+                (screen_x - 10, screen_y + 10),
+                (screen_x + 10, screen_y + 10)
+            ])
+        
+        # Draw dangers as red circles
+        for danger in marked_positions['dangers']:
+            screen_x, screen_y = self.coord_system.screen_coordinates(danger['x'], danger['y'])
+            pygame.draw.circle(self.screen, (255, 0, 0), (screen_x, screen_y), 10, 2)
+        
+        # Draw pillars as black circles
+        for pillar in marked_positions['pillars']:
+            screen_x, screen_y = self.coord_system.screen_coordinates(pillar['x'], pillar['y'])
+            pygame.draw.circle(self.screen, (0, 0, 0), (screen_x, screen_y), 10, 2)
+
+def distance(point1, point2):
+    """Calculate Euclidean distance between two points"""
+    return ((point1['x'] - point2['x'])**2 + (point1['y'] - point2['y'])**2)**0.5

@@ -152,6 +152,58 @@ def load_json_waypoints(filename):
         print(f"Error: File {filename}.json not found.")
         return None
 
+
+def load_marked_positions(filename='marked_positions.json'):
+    """
+    Load marked positions from JSON file and draw them on screen.
+    
+    Args:
+        filename (str): Name of the JSON file to load
+    """
+    global path_wp, path_wp_cm, action_index
+    
+    try:
+        with open(filename, 'r') as f:
+            data = json.load(f)
+        
+        # # Reset existing waypoints if needed
+        # path_wp = []
+        # path_wp_cm = []
+        # action_index = 0
+        
+        # screen_setup(screen)  # Refresh the screen
+
+        # Draw markers
+        print(data)
+        for marker_type, markers in data.items():
+            for marker in markers:
+                x_cm = marker['x']*100
+                y_cm = marker['y']*100
+                
+                # Convert cm to pixel coordinates
+                x_px = int(x_cm / MAP_SIZE_COEFF)
+                y_px = int(SCREEN_HEIGHT - y_cm / MAP_SIZE_COEFF)
+                
+                # Draw marker based on type
+                if marker_type == 'victims':
+                    pygame.draw.polygon(screen, (0, 255, 0), [
+                        (x_px, y_px - 10),
+                        (x_px - 10, y_px + 10),
+                        (x_px + 10, y_px + 10)
+                    ])
+                elif marker_type == 'dangers':
+                    pygame.draw.circle(screen, (255, 0, 0), (x_px, y_px), 10, 2)
+                elif marker_type == 'pillars':
+                    pygame.draw.circle(screen, (0, 0, 0), (x_px, y_px), 10, 2)
+        
+        # pygame.display.update()
+        print(f"Successfully loaded markers from {filename}")
+        return data
+    
+    except FileNotFoundError:
+        print(f"Error: File {filename} not found.")
+        return None
+
 def process_waypoint_input(pos):
 
     """
@@ -407,10 +459,13 @@ while running:
                         process_waypoint_input(path_wp_temp[i])
                         # print(f"i is {i}, pathwp is{path_wp_temp}, currentpos is {path_wp_temp[i]}")
 
-            elif event.key == pygame.K_l:  # 'L' key to load JSON
+            elif event.key == pygame.K_l:  # 'L' key to load JSON waypoints
                 # Prompt for filename (using Pygame's built-in input is tricky, so we'll use input())
                 filename = input("Enter JSON filename to load (without .json extension): ")
                 load_json_waypoints(filename)
+
+            elif event.key == pygame.K_m:  # 'M' key to load markers
+                load_marked_positions()
     
     # Display the current mouse position at the top left
     current_pos = pygame.mouse.get_pos()
