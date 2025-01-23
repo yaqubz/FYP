@@ -1,3 +1,5 @@
+# 23 Jan Note: Cannot be used to get the drone to transit from one script to the next as it will land when a script ends.
+
 import subprocess
 
 # Paths to the main scripts

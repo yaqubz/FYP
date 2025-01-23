@@ -1,3 +1,5 @@
+# WORKS 23 Jan - Run this from the main directory to call the scripts, similar to a .bat file
+
 import subprocess
 
 # Paths to the main scripts
