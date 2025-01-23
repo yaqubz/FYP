@@ -1,3 +1,7 @@
+# 23 Jan: Works even without ToF; Can run without flying using NO_FLY = True; Press q to exit and land
+
+# Reads waypoint JSON file and executes it, then changes over to navigation_thread to use depth-mapping and lands on valid marker.
+
 from PPFLY2.main import execute_waypoints
 
 
@@ -10,8 +14,7 @@ import threading
 from threading import Lock
 import time
 
-SIMULATE = False     # indicate SIMULATE = True so that the drone doesn't fly but the video feed still appears
-# But after seeing a marker, it will still attempt to land, and will exit the code.
+NO_FLY = True     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
 
 def get_calibration_parameters():
     camera_matrix = np.array([
@@ -156,12 +159,13 @@ def navigation_thread(controller):
     cv2.namedWindow("Drone Navigation", cv2.WINDOW_NORMAL)
     
     # Ensure frame reader is initialized
-    frame_reader = controller.drone.get_frame_read()    # 15 Jan problem is here????
-    time.sleep(5)  # Give time for camera to initialize
+    frame_reader = controller.drone.get_frame_read()
+    print("Initializing Camera...")
+    time.sleep(2)  # Give time for camera to initialize
     
     # Initial movement
     print("Moving to initial altitude...")
-    if not SIMULATE:
+    if not NO_FLY:
         controller.drone.move_up(20)
     time.sleep(2)
     
@@ -176,13 +180,13 @@ def navigation_thread(controller):
             battery_level = controller.drone.get_battery()
             if battery_level < 10:  # Critical battery threshold
                 print(f"Battery level critical ({battery_level}%)! Landing...")
-                controller.drone.land()
-                # Perform cleanup only after landing
-                print("Cleaning up navigation thread...")
-                controller.drone.send_rc_control(0, 0, 0, 0)
-                cv2.destroyAllWindows()
-                cv2.waitKey(1)
-                time.sleep(0.5)
+                # controller.drone.land()
+                # # Perform cleanup only after landing
+                # print("Cleaning up navigation thread...")
+                # controller.drone.send_rc_control(0, 0, 0, 0)
+                # cv2.destroyAllWindows()
+                # cv2.waitKey(1)
+                # time.sleep(0.5)
                 break
             
             # Get frame with retry mechanism
@@ -276,16 +280,22 @@ def navigation_thread(controller):
                     controller.drone.send_rc_control(0, 0, 0, 0)
                     approach_complete = True
                     time.sleep(1)
-                    controller.drone.land()
+                    # controller.drone.land()
+
+                    # GAB ADDED 23 JAN; then Gab also shifted down to main() 
+                    # cv2.destroyAllWindows()
+                    # cv2.waitKey(1)
+                    # time.sleep(0.5)
+                    # print("Cleaning up navigation thread after successful marker landing...")
                 
-                else:  # Both centering and approach are complete
+                else:  # Both centering and approach are complete (TBC 23 Jan - does it ever come here?)
                     print("Landing sequence initiated...")
-                    controller.drone.land()
-                    print("Cleaning up navigation thread after successful marker landing...")
-                    controller.drone.send_rc_control(0, 0, 0, 0)
-                    cv2.destroyAllWindows()
-                    cv2.waitKey(1)
-                    time.sleep(0.5)
+                    # controller.drone.land()
+                    # print("Cleaning up navigation thread after successful marker landing...")
+                    # controller.drone.send_rc_control(0, 0, 0, 0)
+                    # cv2.destroyAllWindows()
+                    # cv2.waitKey(1)
+                    # time.sleep(0.5)
                     break
             
             # Split depth map into regions for navigation
@@ -333,7 +343,7 @@ def navigation_thread(controller):
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                 else:
                     if blue_center > red_center and dist <= 600:
-                        if not SIMULATE:
+                        if not NO_FLY:
                             controller.drone.rotate_clockwise(135)
                         time.sleep(1)  # Stabilize
                         cv2.putText(display_frame, "Avoiding Obstacle", (10, 60), 
@@ -371,7 +381,9 @@ def navigation_thread(controller):
             
             # If 'q' is pressed, just continue searching
             if cv2.waitKey(1) & 0xFF == ord('q'):
-                continue
+                print("Exiting. Drone landing.")
+                # controller.drone.land()
+                break
                 
         except Exception as e:
             print(f"Error in navigation: {e}")
@@ -382,19 +394,27 @@ def main():
     controller = DroneController()
     try:
         print("Taking off...")
-        if not SIMULATE:    
+        if not NO_FLY:    
             controller.drone.takeoff()
-            execute_waypoints("waypoint20x20.json", controller.drone, SIMULATE)
+            execute_waypoints("waypoint20x20.json", controller.drone, NO_FLY)
         else:
             print("Simulating takeoff. Drone will NOT fly.")
         time.sleep(2)
         
+        ## MTD 1: Directly call function
         # navigation_thread(controller)
-        # Start navigation thread
+
+        ## MTD 2: Start navigation thread (Gab TBC 23 Jan: Does it really need a thread? More like a thread for video streaming maybe. Same performance.)
+
         nav_thread = threading.Thread(target=navigation_thread, args=(controller,))
         nav_thread.start()
-        nav_thread.join()
-        
+        nav_thread.join()   # instructs the main thread to wait until the target thread finishes its execution before proceeding. 
+
+        print("Actually landing for real.")
+        controller.drone.end()      # Replace all land() with end() for consistency? Fundamentally different but practically same. Just need one end() after exiting nav_thread.
+        cv2.destroyAllWindows()
+        cv2.waitKey(1)
+    
     except Exception as e:
         print(f"Error in main: {e}")
 
