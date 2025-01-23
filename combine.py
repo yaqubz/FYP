@@ -396,7 +396,7 @@ def main():
         print("Taking off...")
         if not NO_FLY:    
             controller.drone.takeoff()
-            execute_waypoints("waypoint20x20.json", controller.drone, NO_FLY)
+            execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         else:
             print("Simulating takeoff. Drone will NOT fly.")
         time.sleep(2)
