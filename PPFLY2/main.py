@@ -5,6 +5,8 @@
 """
 Typically, drone only rotates and moves forward. It will only do otherwise for error correction using UWB.
 
+CANNOT BE RUN DIRECTLY! Only here to have execute_waypoints imported
+
 TBC 23 Jan: utils or .utils - cannot find one solution to work for both running directly vs. as a module? Need to use .utils to be imported properly by other scripts.
 """
 

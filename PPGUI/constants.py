@@ -30,10 +30,15 @@ GREY = (200, 200, 200)
 
 # Positions
 ENDPOS = (400, 0)
-STARTPOS_1_CM = (1000, 200) # ORIGIN @ bottom left
-STARTPOS_2_CM = (1000, 800)
-STARTPOS_3_CM = (1800, 800)
-STARTPOS_4_CM = (1800, 200)
+# STARTPOS_1_CM = (1000, 200) # ORIGIN @ bottom left
+# STARTPOS_2_CM = (1000, 800)
+# STARTPOS_3_CM = (1800, 800)
+# STARTPOS_4_CM = (1800, 200)
+
+STARTPOS_1_CM = (50, 50) # ORIGIN @ bottom left
+STARTPOS_2_CM = (50, 100)
+STARTPOS_3_CM = (100, 100)
+STARTPOS_4_CM = (100, 50)
 
 #    This is to convert origin from top-left of screen (pygame default) to bottom-left (UWB)
 STARTPOS_1 = (STARTPOS_1_CM[0]/MAP_SIZE_COEFF, (ACTUAL_HEIGHT-STARTPOS_1_CM[1])/MAP_SIZE_COEFF) 
