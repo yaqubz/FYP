@@ -1,14 +1,19 @@
-# 8 JAN WORKS: main_udp.c sends the position of ALL nodes (aka tags) in a single message
+# 8 JAN WORKS: main_udp.c sends the position of ALL nodes (aka tags) in a single message via UDP Port 5000. 
 
 # TBD: Can combine/simplify get_target_position and get_all_positions? 
 # TBD: Can establish just one single socket connection instead of always having to connect at every query?  
 
 """
+README (updated 23 Jan) 
+
 The functions in this code are meant to be imported in other codes
 - get_target_position(target_id)
 - get_all_positions()
 
 However, for verification, this code can also be run by itself as main().
+
+This code binds to the port and retrieves the necessary data.
+- Without the .exe file running, can simulate UWB positions being sent via UDP by running the UWB_SendUDP.py script.\
 """
 
 import socket

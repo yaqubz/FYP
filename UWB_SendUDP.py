@@ -1,3 +1,5 @@
+# 23 Jan Note: For testing purposes, run this script to send mock UWB positions for 3 drones via UDP
+
 import socket
 import time
 import math

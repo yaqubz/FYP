@@ -1,5 +1,6 @@
-# 8 Jan WORKS WELL but still In Progress, Integrating UWB
+# 23 Jan WORKS WELL but still In Progress, Integrating UWB
 # Under constants, Set SIMULATE = True/False as necessary
+# IMPT: This version is only different from PPFLY in the execute_waypoints() function - here, the drone itself is an argument, which is needed to import this function in another script
 
 """
 Typically, drone only rotates and moves forward. It will only do otherwise for error correction using UWB.

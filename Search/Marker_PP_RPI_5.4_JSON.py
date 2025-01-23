@@ -15,8 +15,9 @@ np.set_printoptions(legacy='1.25')
 
 class CustomTello(Tello):
     def __init__(self, 
-                 host='192.168.0.117',  # Drone's IP (if connected via RPi_17)
-                #  host='192.168.10.1',  # Drone's IP (if connected directly)
+                # IMPT: TOGGLE VIA COMMENT
+                #  host='192.168.0.117',  # Drone's IP (if connected via RPi_17)
+                 host='192.168.10.1',  # Drone's IP (if connected directly)
                  control_port=8889,      # Keep standard Tello port
                  state_port=8890,        
                  video_port=11111):       # Unique video port
@@ -202,7 +203,7 @@ def stream_video(drone):
                 
                 # print(ids, "  ", corners)
 
-        cv2.imshow("frame", frame)      # IMPT: UNCOMENT this for streaming!!
+        cv2.imshow("frame", frame)      # IMPT: TOGGLE VIA UNCOMENT for streaming!!
     
         # Check if streaming readiness hasn't been signaled yet
         if not stream_ready.is_set():
