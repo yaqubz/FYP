@@ -4,7 +4,7 @@
 from djitellopy import Tello
 import cv2, time
 
-# Define configuration constants
+# Define configuration constants if connected via RPi
 # NETWORK_CONFIG = {
 #     'host': '192.168.0.117',
 #     'control_port': 8889,
