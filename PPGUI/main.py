@@ -193,7 +193,7 @@ def save_json(path_wp, json_name):     # Computes and saves final waypoints into
     Format of json:
     - distance and angle to NEXT waypoint
     - current waypoint
-    i.e. last waypoint is NOT stored (perhaps, unless I indicate 0,0 distance to next waypoint)
+    i.e. by default, last waypoint is not stored (CAN BE TOGGLED BY uncommenting under "else")
     """
     if len(path_wp) > 1:      
         path_dist_cm = []
@@ -217,10 +217,12 @@ def save_json(path_wp, json_name):     # Computes and saves final waypoints into
         
                 print(f"{index} yaw angle = {round(angle,0)}")    # TODO 30/10 Check whether can fly with decimal yaw commands
                 path_angle.append(round(angle,0))
-            else: # NEW 7 JAN - final waypoint with remaining distance = 0, angle = 0
-                path_dist_cm.append(0)
-                path_dist_px.append(0)
-                path_angle.append(0)
+
+            # else: # NEW 7 JAN - final waypoint with remaining distance = 0, angle = 0 (IMPT: ENABLE OR DISABLE THIS AS NEEDED. Alternatively, just delete the last waypoint in the json.)
+            #       # TBC 23 Jan : is this really needed for UWB localization?
+            #     path_dist_cm.append(0)
+            #     path_dist_px.append(0)
+            #     path_angle.append(0)
 
         # Create waypoints data
         waypoints = []
