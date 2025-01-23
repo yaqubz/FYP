@@ -34,6 +34,9 @@ class MockTello:
     def land(self):
         print("Mock: Landing...")
 
+    def end(self):
+        print("Mock: Landing and Ending...")
+
 def validate_waypoints(json_filename):
     with open(json_filename, 'r') as f:
         data = json.load(f)

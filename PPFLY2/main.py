@@ -4,6 +4,8 @@
 
 """
 Typically, drone only rotates and moves forward. It will only do otherwise for error correction using UWB.
+
+TBC 23 Jan: utils or .utils - cannot find one solution to work for both running directly vs. as a module? Need to use .utils to be imported properly by other scripts.
 """
 
 from djitellopy import Tello
@@ -28,27 +30,16 @@ def parse_args():
     return parser.parse_args()
 
 def execute_waypoints(json_filename, drone, simulate = False):
+    """
+    Connect, takeoff and landing should be done outside this function.
+    """
     global LAND_ID, FLYING_STATE, waypoints
     global start_batt, end_batt
     tello = MockTello() if simulate else drone
     TAKEOFF_DELAY = 0 if simulate else 3 
     DELAY = 0 if simulate else 2
     
-    try:
-        # Initialize SDK mode
-        # FLYING_STATE = True # not used yet
-        # tello.connect()
-        # start_batt = tello.get_battery()
-        # start_time = time.time()
-        # print(f"Start Battery: {tello.get_battery()}")
-        # tello.set_mission_pad_detection_direction(2)
-        # time.sleep(0.5)
-        
-        # # Take off
-        # print("Taking off...")
-        # tello.takeoff()
-        # time.sleep(TAKEOFF_DELAY)  # Give more time for takeoff to stabilize
-        
+    try:      
         # Read waypoints from file
         with open(json_filename, 'r') as f:
             data = json.load(f)
@@ -66,7 +57,7 @@ def execute_waypoints(json_filename, drone, simulate = False):
         save_pos_UWB(waypoints_UWB, orientations_UWB, lastpos_cm[0:2])
         save_errors(pos_error_list, orientations_error_list, waypoints[-1], waypoints_UWB[-1], orientation, obtain_orientation(waypoints_UWB))
         print(f"WAYPOINTS UWB: {waypoints_UWB}")
-        # printdistance(waypoints_UWB[-2], waypoints_UWB[-1]) # HELLOIMPT: THIS SHOULD HAVE INDEX ERROR (IDK HOW TO CATCH ERROR P)
+        # printdistance(waypoints_UWB[-2], waypoints_UWB[-1]) # HELLOIMPT: THIS SHOULD HAVE INDEX ERROR (IDK HOW TO CATCH ERROR P) 23 Jan: TBC but code still can run even with error?
 
         # Execute each waypoint
         for wp_index, wp in enumerate(data['wp']):
@@ -167,20 +158,40 @@ def execute_waypoints(json_filename, drone, simulate = False):
         #     print(f"End Battery: {end_batt}%")
         #     print(f"Mission Duration (s): {(end_time-start_time):.2f}, Battery Used (%): {start_batt-end_batt}, %/min: {((start_batt-end_batt)/(end_time-start_time)*60):.1f}")
         #     time.sleep(DELAY)
-        print("Mission completed! Continuing on")
+        print("Mission completed! Not Landing.")
         
-        # Save waypoints to JSON file
-        with open("waypoints_commanded.json", "w") as f:
-            json.dump(waypoints, f, indent=4)
+        # # Save waypoints to JSON file (DISABLED 23 JAN)
+        # with open("waypoints_commanded.json", "w") as f:
+        #     json.dump(waypoints, f, indent=4)
 
 if __name__ == "__main__":
-    args = parse_args()
+    # args = parse_args()
+    # SIMULATE = args.simulate    # Override SIMULATE from constants.py with command line argument; Disabled 23 Jan
+
+
+    """
+    IMPT: This should not typically run as the main code (still figuring out 23 Jan), but only if required.
+    """
+
+    tello = MockTello() if SIMULATE else Tello()
+    TAKEOFF_DELAY = 0 if SIMULATE else 3 
+    DELAY = 0 if SIMULATE else 2
+
+    tello.connect()
+    start_batt = tello.get_battery()
+    print(f"Battery: {tello.get_battery()}")
+    time.sleep(0.5)
     
-    SIMULATE = args.simulate    # Override SIMULATE from constants.py with command line argument
-    
+    # Take off
+    print("Taking off...")
+    tello.takeoff()
+    time.sleep(TAKEOFF_DELAY)  # Give more time for takeoff to stabilize
+
     if validate_waypoints(INPUT_JSON):
         print(f"Waypoints validated. Starting execution in {'simulation' if SIMULATE else 'real'} mode...")
         time.sleep(2)
-        execute_waypoints(INPUT_JSON, SIMULATE)
+        execute_waypoints(INPUT_JSON, tello, SIMULATE)
+        print("Landing Now.")
+        tello.end()
     else:
         print("Validation failed. Please check warnings above. Exiting program.")
