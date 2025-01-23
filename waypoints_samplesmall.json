@@ -1,0 +1,20 @@
+{
+    "README": "USE THIS FOR TESTING - moves forward 30cm",
+    "wp": [
+        {
+            "dist_cm": 30,
+            "dist_px": 41,
+            "angle_deg": 0.0,
+            "position_cm": {
+                "x": 300,
+                "y": 100
+            }
+        }
+    ],
+    "test_area": {
+        "width_cm": 600,
+        "height_cm": 600,
+        "scale_factor": 0.75
+    },
+    "competition_notice": "This path was planned in a test area. Scale adjustments needed for 20m x 20m competition field."
+}

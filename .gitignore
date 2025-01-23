@@ -46,3 +46,4 @@ waypoints_commanded.json
 # CUSTOM: Ignore JSONs and Diagnostics/ Folder
 Diagnostics/
 *.json
+!waypoints_samplesmall.json
