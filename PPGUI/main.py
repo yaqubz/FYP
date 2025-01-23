@@ -109,6 +109,49 @@ def draw_text_overlay():
     text_info = font.render("CCW is +ve. Assumes drone starts heading 180.", True, BLUE)
     screen.blit(text_info, (10, ACTUAL_HEIGHT-20))
 
+def load_json_waypoints(filename):
+    """
+    Load waypoints from a JSON file and return the pixel coordinates.
+    NOTE: Does not load last waypoint unless it is provided (i.e. distance,angle = 0,0)
+    
+    Args:
+        filename (str): Name of the JSON file to load (without .json extension)
+    
+    Returns:
+        list: Pixel coordinates of waypoints
+    """
+    global path_wp, path_wp_cm, action_index
+    
+    try:
+        with open(f'{filename}.json', 'r') as f:
+            data = json.load(f)
+        
+        # Reset existing waypoints
+        path_wp = []
+        path_wp_cm = []
+        action_index = 0
+        
+        screen_setup(screen)  # Refresh the screen
+
+        # Iterate through waypoints and convert back to pixel coordinates
+        for waypoint in data['wp']:
+            x_cm = waypoint['position_cm']['x']
+            y_cm = waypoint['position_cm']['y']
+            
+            # Convert cm to pixel coordinates
+            x_px = int(x_cm / MAP_SIZE_COEFF)
+            y_px = int(SCREEN_HEIGHT - y_cm / MAP_SIZE_COEFF)
+            
+            # Process each waypoint
+            process_waypoint_input((x_px, y_px))
+        
+        print(f"Successfully loaded waypoints from {filename}.json")
+        return path_wp
+    
+    except FileNotFoundError:
+        print(f"Error: File {filename}.json not found.")
+        return None
+
 def process_waypoint_input(pos):
 
     """
@@ -170,6 +213,7 @@ def process_waypoint_input(pos):
 def label_distance(path_wp, current_pos):
     # Obtains current distance from previous waypoint
     # Calculate and display the distance in cm on the preview line
+    font = pygame.font.Font(None, 24)
     dist_cm, _ = get_dist_btw_pos_px(path_wp[-1], current_pos)
     midpoint_x = (path_wp[-1][0] + current_pos[0]) // 2
     midpoint_y = (path_wp[-1][1] + current_pos[1]) // 2
@@ -362,6 +406,11 @@ while running:
                     for i in range(len(path_wp_temp)):
                         process_waypoint_input(path_wp_temp[i])
                         # print(f"i is {i}, pathwp is{path_wp_temp}, currentpos is {path_wp_temp[i]}")
+
+            elif event.key == pygame.K_l:  # 'L' key to load JSON
+                # Prompt for filename (using Pygame's built-in input is tricky, so we'll use input())
+                filename = input("Enter JSON filename to load (without .json extension): ")
+                load_json_waypoints(filename)
     
     # Display the current mouse position at the top left
     current_pos = pygame.mouse.get_pos()

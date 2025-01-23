@@ -79,7 +79,7 @@ def get_yaw_angle(pos0, pos1, posref):
 
 def print_json_waypoints(filename):
     """
-    :param filename: EXCLUDE .json extension (e.g. 'pathplanningGUI/waypoint20x20')
+    :param filename: Exclude .json extension (e.g. 'pathplanningGUI/waypoint20x20')
     Checker function to review generated json.
     """
     with open(f'{filename}.json', 'r') as f:
