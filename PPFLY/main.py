@@ -173,9 +173,9 @@ def execute_waypoints(json_filename, simulate = False):
             json.dump(waypoints, f, indent=4)
 
 if __name__ == "__main__":
-    args = parse_args()
+    # args = parse_args()
     
-    SIMULATE = args.simulate    # Override SIMULATE from constants.py with command line argument
+    # SIMULATE = args.simulate    # Override SIMULATE from constants.py with command line argument
     
     if validate_waypoints(INPUT_JSON):
         print(f"Waypoints validated. Starting execution in {'simulation' if SIMULATE else 'real'} mode...")
