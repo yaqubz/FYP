@@ -28,7 +28,14 @@ BLUE = (0, 0, 255)
 ORANGE = (255, 165, 0)
 GREY = (200, 200, 200)
 
-# Positions
+# # Positions for 20x20
+# ENDPOS = (400, 0)
+# STARTPOS_1_CM = (1000, 200) # ORIGIN @ bottom left
+# STARTPOS_2_CM = (1000, 800)
+# STARTPOS_3_CM = (1800, 800)
+# STARTPOS_4_CM = (1800, 200)
+
+# Positions for 6x6
 ENDPOS = (400, 0)
 # STARTPOS_1_CM = (1000, 200) # ORIGIN @ bottom left
 # STARTPOS_2_CM = (1000, 800)

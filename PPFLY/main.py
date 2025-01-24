@@ -7,15 +7,30 @@ Typically, drone only rotates and moves forward. It will only do otherwise for e
 
 from djitellopy import Tello
 
-from utils import *
-from constants import *
+# 21 JAN: Work in progress; not the best solution for importing! TBC run this as a module and/or stand-alone?
+
+if __name__ == "__main__":
+    import os
+    import sys
+    # Add the package's parent directory to sys.path
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(current_dir)
+    sys.path.append(parent_dir)
+
+    # Use absolute imports for direct execution
+    from PPFLY.utils import *
+    from PPFLY.constants import *
+else:
+    # Use relative imports for package execution
+    from .utils import *
+    from .constants import *
 
 import json, math, time, sys, argparse
 from pathlib import Path
 
-# Add workspace root to sys.path (9 Jan: Works but might need a better solution)
-workspace_root = Path(__file__).resolve().parent.parent
-sys.path.append(str(workspace_root))
+# # Add workspace root to sys.path (9 Jan: Works but might need a better solution)
+# workspace_root = Path(__file__).resolve().parent.parent
+# sys.path.append(str(workspace_root))
 
 from UWB_ReadUDP import get_target_position # own custom library
 
@@ -26,7 +41,12 @@ def parse_args():
                        help='Run in simulation mode')
     return parser.parse_args()
 
-def execute_waypoints(json_filename, simulate = False):
+def execute_waypoints(json_filename, simulate = False, land = True):
+    """
+    Takes in a json with the waypoints and executes them, with/without UWB feedback. 
+    :param: land 
+    TBC 21 Jan
+    """
     global LAND_ID, FLYING_STATE, waypoints
     global start_batt, end_batt
     tello = MockTello() if simulate else Tello()
@@ -36,17 +56,17 @@ def execute_waypoints(json_filename, simulate = False):
     try:
         # Initialize SDK mode
         FLYING_STATE = True # not used yet
-        tello.connect()
-        start_batt = tello.get_battery()
-        start_time = time.time()
-        print(f"Start Battery: {tello.get_battery()}")
-        tello.set_mission_pad_detection_direction(2)
-        time.sleep(0.5)
+        # tello.connect()
+        # start_batt = tello.get_battery()
+        # start_time = time.time()
+        # print(f"Start Battery: {tello.get_battery()}")
+        # tello.set_mission_pad_detection_direction(2)
+        # time.sleep(0.5)
         
-        # Take off
-        print("Taking off...")
-        tello.takeoff()
-        time.sleep(TAKEOFF_DELAY)  # Give more time for takeoff to stabilize
+        # # Take off
+        # print("Taking off...")
+        # tello.takeoff()
+        # time.sleep(TAKEOFF_DELAY)  # Give more time for takeoff to stabilize
         
         # Read waypoints from file
         with open(json_filename, 'r') as f:
@@ -158,7 +178,7 @@ def execute_waypoints(json_filename, simulate = False):
         print(f"Error occurred: {e}")
     
     finally:
-        if tello.is_flying:
+        if tello.is_flying and land:
             print("Landing...")
             tello.land()
             end_batt = tello.get_battery()
@@ -172,14 +192,28 @@ def execute_waypoints(json_filename, simulate = False):
         with open("waypoints_commanded.json", "w") as f:
             json.dump(waypoints, f, indent=4)
 
+        print("Waypoints executed. Please don't land.")
+
 if __name__ == "__main__":
     # args = parse_args()
-    
     # SIMULATE = args.simulate    # Override SIMULATE from constants.py with command line argument
     
     if validate_waypoints(INPUT_JSON):
-        print(f"Waypoints validated. Starting execution in {'simulation' if SIMULATE else 'real'} mode...")
+        print(f"Waypoints validated. Starting execution in {'SIMULATION' if SIMULATE else 'REAL'} mode...")
         time.sleep(2)
+        
+        tello = Tello()
+        tello.connect()
+        start_batt = tello.get_battery()
+        start_time = time.time()
+        print(f"Start Battery: {tello.get_battery()}")
+        time.sleep(0.5)
+        
+        # Take off
+        print("Taking off...")
+        tello.takeoff()
+        time.sleep(2)  # Give more time for takeoff to stabilize
+
         execute_waypoints(INPUT_JSON, SIMULATE)
     else:
         print("Validation failed. Please check warnings above. Exiting program.")
