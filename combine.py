@@ -1,6 +1,8 @@
 # 23 Jan: Works even without ToF; Can run without flying using NO_FLY = True; Press q to exit and land
+# 24 Jan: Can stream and work over RPi17; todo: video stream thread, ToF doesn't work well over RPi
 
 # Reads waypoint JSON file and executes it, then changes over to navigation_thread to use depth-mapping and lands on valid marker.
+
 
 from PPFLY2.main import execute_waypoints
 
@@ -16,6 +18,15 @@ import time
 
 NO_FLY = True     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
 
+# Define configuration constants
+NETWORK_CONFIG = {
+    # 'host': '192.168.0.117',
+    'host': '192.168.10.1',
+    'control_port': 8889,
+    'state_port': 8890,
+    'video_port': 11111
+}
+
 def get_calibration_parameters():
     camera_matrix = np.array([
         [921.170702, 0.000000, 459.904354],
@@ -25,10 +36,30 @@ def get_calibration_parameters():
     dist_coeffs = np.array([0.036099, -0.028374, -0.003189, -0.001275, 0.000000])
     return camera_matrix, dist_coeffs
 
+class CustomTello(Tello):
+    def __init__(self, network_config):
+        # Store custom configuration
+        self.TELLO_IP = network_config['host']
+        self.CONTROL_UDP_PORT = network_config['control_port']
+        self.STATE_UDP_PORT = network_config['state_port']
+        self.VS_UDP_PORT = network_config['video_port']
+        
+        Tello.STATE_UDP_PORT = self.STATE_UDP_PORT
+        Tello.CONTROL_UDP_PORT = self.CONTROL_UDP_PORT
+        
+        # Call parent's init with our custom host
+        super().__init__(self.TELLO_IP)
+        
+        # Override the connection parameters
+        self.address = (self.TELLO_IP, self.CONTROL_UDP_PORT)
+        
+        # Override video port
+        self.vs_udp_port = self.VS_UDP_PORT
+
 class DroneController:
-    def __init__(self):
+    def __init__(self, network_config):
         # Initialize Tello
-        self.drone = Tello()
+        self.drone = CustomTello(network_config)
         self.drone.connect()
         print(f"Battery Level: {self.drone.get_battery()}%")
         self.drone.streamon()
@@ -99,7 +130,7 @@ class DroneController:
         with self.marker_x_lock:
             self.marker_x = x
 
-    def detect_markers(self, frame, marker_size=15.0):
+    def detect_markers(self, frame, marker_size=15.0):  # 24 Jan: Might need to recalibrate for 14cm
         """Detect ArUco markers and estimate pose"""
         camera_matrix, dist_coeffs = get_calibration_parameters()
         aruco_dict = aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_250)
@@ -179,14 +210,7 @@ def navigation_thread(controller):
             # Check battery level
             battery_level = controller.drone.get_battery()
             if battery_level < 10:  # Critical battery threshold
-                print(f"Battery level critical ({battery_level}%)! Landing...")
-                # controller.drone.land()
-                # # Perform cleanup only after landing
-                # print("Cleaning up navigation thread...")
-                # controller.drone.send_rc_control(0, 0, 0, 0)
-                # cv2.destroyAllWindows()
-                # cv2.waitKey(1)
-                # time.sleep(0.5)
+                print(f"Battery level critical ({battery_level}%)! Initiating landing sequence...")
                 break
             
             # Get frame with retry mechanism
@@ -239,64 +263,55 @@ def navigation_thread(controller):
                 # Centering threshold
                 centering_threshold = 30
                 
-                if not centering_complete:
-                    if abs(x_error) > centering_threshold:
-                        # Calculate yaw speed based on error
-                        yaw_speed = int(np.clip(x_error / 10, -20, 20))
-                        controller.drone.send_rc_control(0, 0, 0, yaw_speed)
-                        print(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
-                    else:
-                        print("Marker centered! Starting approach...")
-                        controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
-                        time.sleep(1)  # Stabilize
-                        centering_complete = True
-                        approach_start_time = time.time()
-                
-                elif not approach_complete:
-                    current_distance = controller.get_distance()
-                    if current_distance is None:
-                        print("Lost marker distance during approach...")
-                        time.sleep(0.1)
-                        continue
+                if not NO_FLY:
+                    if not centering_complete:
+                        if abs(x_error) > centering_threshold:
+                            # Calculate yaw speed based on error
+                            yaw_speed = int(np.clip(x_error / 10, -20, 20))
+                            controller.drone.send_rc_control(0, 0, 0, yaw_speed)
+                            print(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
+                        else:
+                            print("Marker centered! Starting approach...")
+                            controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
+                            time.sleep(1)  # Stabilize
+                            centering_complete = True
+                            approach_start_time = time.time()
+                    
+                    elif not approach_complete:
+                        current_distance = controller.get_distance()
+                        if current_distance is None:
+                            print("Lost marker distance during approach...")
+                            time.sleep(0.1)
+                            continue
+                            
+                        print(f"Current distance to marker: {current_distance:.1f}cm")
                         
-                    print(f"Current distance to marker: {current_distance:.1f}cm")
-                    
-                    # Define safe approach distance (60cm from marker)
-                    safe_distance = max(int(current_distance - 50), 0)  # Keep 60cm safety margin
-                    
-                    if safe_distance > 0:
-                        print(f"Moving forward {safe_distance}cm to approach marker...")
-                        controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
-                        time.sleep(1)  # Stabilize
-                        controller.drone.move_forward(safe_distance)  # Move exact distance
-                        time.sleep(2)  # Wait for movement to complete
+                        # Define safe approach distance (60cm from marker)
+                        safe_distance = max(int(current_distance - 50), 0)  # Keep 60cm safety margin
                         
-                        # Verify new position
-                        new_distance = controller.get_distance()
-                        if new_distance is not None:
-                            print(f"New distance to marker: {new_distance:.1f}cm")
+                        if safe_distance > 0:
+                            print(f"Moving forward {safe_distance}cm to approach marker...")
+                            controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
+                            time.sleep(1)  # Stabilize
+                            controller.drone.move_forward(safe_distance)  # Move exact distance
+                            time.sleep(2)  # Wait for movement to complete
+                            
+                            # Verify new position
+                            new_distance = controller.get_distance()
+                            if new_distance is not None:
+                                print(f"New distance to marker: {new_distance:.1f}cm")
+                        
+                        print("Approach complete!")
+                        controller.drone.send_rc_control(0, 0, 0, 0)
+                        approach_complete = True
+                        time.sleep(1)
+                        break   # Gab 24 Jan - Must exit the while loop! Or else the drone cannot see the marker directly below it and continues to search.
                     
-                    print("Approach complete!")
-                    controller.drone.send_rc_control(0, 0, 0, 0)
-                    approach_complete = True
-                    time.sleep(1)
-                    # controller.drone.land()
-
-                    # GAB ADDED 23 JAN; then Gab also shifted down to main() 
-                    # cv2.destroyAllWindows()
-                    # cv2.waitKey(1)
-                    # time.sleep(0.5)
-                    # print("Cleaning up navigation thread after successful marker landing...")
-                
-                else:  # Both centering and approach are complete (TBC 23 Jan - does it ever come here?)
-                    print("Landing sequence initiated...")
-                    # controller.drone.land()
-                    # print("Cleaning up navigation thread after successful marker landing...")
-                    # controller.drone.send_rc_control(0, 0, 0, 0)
-                    # cv2.destroyAllWindows()
-                    # cv2.waitKey(1)
-                    # time.sleep(0.5)
-                    break
+                    else:  # Both centering and approach are complete (TBC 23 Jan - does it ever come here?)
+                        print("Initiating landing sequence...")
+                        break
+                else: # if simulating
+                    print("Marker Found, but not landing since not flying. Program continues.")
             
             # Split depth map into regions for navigation
             h, w = depth_colormap.shape[:2]
@@ -337,17 +352,21 @@ def navigation_thread(controller):
                         controller.drone.send_rc_control(0, 0, 0, -controller.yaw_speed)
                         cv2.putText(display_frame, "Turning Left", (10, 60), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        print("[INFO] Turning Left")
                     else:
                         controller.drone.send_rc_control(0, 0, 0, controller.yaw_speed)
                         cv2.putText(display_frame, "Turning Right", (10, 60), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        print("[INFO] Turning Left")
                 else:
                     if blue_center > red_center and dist <= 600:
                         if not NO_FLY:
                             controller.drone.rotate_clockwise(135)
-                        time.sleep(1)  # Stabilize
                         cv2.putText(display_frame, "Avoiding Obstacle", (10, 60), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        print("[INFO] Avoiding Obstacle")
+                        time.sleep(1)  # Stabilize
+
                     else:
                         controller.drone.send_rc_control(0, controller.move_speed, 0, 0)
                         cv2.putText(display_frame, "Moving Forward", (10, 60), 
@@ -391,7 +410,7 @@ def navigation_thread(controller):
             continue
 
 def main():
-    controller = DroneController()
+    controller = DroneController(NETWORK_CONFIG)
     try:
         print("Taking off...")
         if not NO_FLY:    
@@ -402,13 +421,13 @@ def main():
         time.sleep(2)
         
         ## MTD 1: Directly call function
-        # navigation_thread(controller)
+        navigation_thread(controller)
 
         ## MTD 2: Start navigation thread (Gab TBC 23 Jan: Does it really need a thread? More like a thread for video streaming maybe. Same performance.)
 
-        nav_thread = threading.Thread(target=navigation_thread, args=(controller,))
-        nav_thread.start()
-        nav_thread.join()   # instructs the main thread to wait until the target thread finishes its execution before proceeding. 
+        # nav_thread = threading.Thread(target=navigation_thread, args=(controller,))
+        # nav_thread.start()
+        # nav_thread.join()   # instructs the main thread to wait until the target thread finishes its execution before proceeding. 
 
         print("Actually landing for real.")
         controller.drone.end()      # Replace all land() with end() for consistency? Fundamentally different but practically same. Just need one end() after exiting nav_thread.
