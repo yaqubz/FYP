@@ -1,8 +1,11 @@
+# WORKS 23 JAN: Reads waypoint JSON file and executes it, then changes over to navigation_thread to use depth-mapping and lands on valid marker.
+
+"""
+Change Log:
 # 23 Jan: Works even without ToF; Can run without flying using NO_FLY = True; Press q to exit and land
-# 24 Jan: Can stream and work over RPi17; todo: video stream thread, ToF doesn't work well over RPi
-
-# Reads waypoint JSON file and executes it, then changes over to navigation_thread to use depth-mapping and lands on valid marker.
-
+# 24 Jan: Can stream and work over RPi17; TODO: video stream thread, ToF doesn't work well over RPi
+# 29 Jan: Rework 2D and 3D distance mapping, Calibration
+"""
 
 from PPFLY2.main import execute_waypoints
 
@@ -15,26 +18,43 @@ from djitellopy import Tello
 import threading
 from threading import Lock
 import time
+import os
 
-NO_FLY = True     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
+NO_FLY = False     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
 
 # Define configuration constants
 NETWORK_CONFIG = {
-    # 'host': '192.168.0.117',
-    'host': '192.168.10.1',
+    # 'host': '192.168.0.117',  # if connected through RPi 17
+    'host': '192.168.10.1',     # if connected directly through WiFi
     'control_port': 8889,
     'state_port': 8890,
     'video_port': 11111
 }
 
-def get_calibration_parameters():
-    camera_matrix = np.array([
-        [921.170702, 0.000000, 459.904354],
-        [0.000000, 919.018377, 351.238301],
-        [0.000000, 0.000000, 1.000000]
-    ])
-    dist_coeffs = np.array([0.036099, -0.028374, -0.003189, -0.001275, 0.000000])
+# def get_calibration_parameters():
+#     camera_matrix = np.array([
+#         [921.170702, 0.000000, 459.904354],
+#         [0.000000, 919.018377, 351.238301],
+#         [0.000000, 0.000000, 1.000000]
+#     ])
+#     dist_coeffs = np.array([0.036099, -0.028374, -0.003189, -0.001275, 0.000000])
+#     return camera_matrix, dist_coeffs
+
+def get_calibration_parameters(TELLO_NO: str = 'D'):  # TESTING 29 JAN
+    # Construct file paths
+    camera_matrix_path = os.path.join("Diagnostics", f"camera_matrix_tello{TELLO_NO}.npy")
+    dist_coeffs_path = os.path.join("Diagnostics", f"dist_coeffs_tello{TELLO_NO}.npy")
+
+    # Ensure files exist before loading
+    if not os.path.exists(camera_matrix_path) or not os.path.exists(dist_coeffs_path):
+        raise FileNotFoundError(f"Calibration files for Tello {TELLO_NO} not found.")
+
+    # Load calibration parameters
+    camera_matrix = np.load(camera_matrix_path)
+    dist_coeffs = np.load(dist_coeffs_path)
+    
     return camera_matrix, dist_coeffs
+
 
 class CustomTello(Tello):
     def __init__(self, network_config):
@@ -78,16 +98,16 @@ class DroneController:
         # Controller state
         self.frame = None
         self.frame_lock = Lock()
-        self.distance = None
+        self.distance = None        # 29 Jan Gab: This is the 3D distance - decently accurate
         self.distance_lock = Lock()
-        self.marker_x = None
+        self.marker_x = None    # NOT BEING USED? 29 Jan Gab
         self.marker_x_lock = Lock()
         self.is_running = True
         self.marker_detected = False
         self.is_centered = False
         self.movement_completed = False
-        self.valid_ids = set(range(1, 9))
-        self.invalid_ids = set(range(11, 15))
+        self.valid_ids = set(range(1, 12))  # Temporary 29 Jan
+        self.invalid_ids = set(range(12, 15))
         self.marker_positions = {}
         
         # Navigation parameters
@@ -130,7 +150,7 @@ class DroneController:
         with self.marker_x_lock:
             self.marker_x = x
 
-    def detect_markers(self, frame, marker_size=15.0):  # 24 Jan: Might need to recalibrate for 14cm
+    def detect_markers(self, frame, marker_size=14.0):  # 24 Jan: Might need to recalibrate for 14cm
         """Detect ArUco markers and estimate pose"""
         camera_matrix, dist_coeffs = get_calibration_parameters()
         aruco_dict = aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_250)
@@ -150,6 +170,7 @@ class DroneController:
                     # Store marker position and distance
                     marker_center = np.mean(corners[i][0], axis=0)
                     self.set_marker_x(marker_center[0])
+                    print(marker_center)
                     self.set_distance(euclidean_distance)
                     return True, corners[i], marker_id[0], rvecs[0], tvecs[0]
         self.set_distance(None)
@@ -174,11 +195,11 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
         
         position_text = f"Pos (cm): X:{x:.1f} Y:{y:.1f} Z:{z:.1f}"
         rotation_text = f"Rot (deg): R:{roll:.1f} P:{pitch:.1f} Y:{yaw:.1f}"
-        distance_text = f"Distance: {euclidean_distance:.1f} cm"
+        distance_text = f"3D Distance: {euclidean_distance:.1f} cm"
         
-        cv2.putText(frame, position_text, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        cv2.putText(frame, rotation_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-        cv2.putText(frame, distance_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(frame, position_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(frame, rotation_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+        cv2.putText(frame, distance_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     
     return frame
 
@@ -197,7 +218,13 @@ def navigation_thread(controller):
     # Initial movement
     print("Moving to initial altitude...")
     if not NO_FLY:
-        controller.drone.move_up(20)
+        current_height = controller.drone.get_height()
+        desired_height = 100
+        if current_height < desired_height:
+            controller.drone.move_up(desired_height - current_height)    # TODO: Go to specific height?
+            new_height = controller.drone.get_height()
+        new_height = controller.drone.get_height()
+        print(f"Drone moved from {current_height:.0f}cm to {new_height:.0f}cm height.")    
     time.sleep(2)
     
     # Approach sequence state
@@ -213,6 +240,9 @@ def navigation_thread(controller):
                 print(f"Battery level critical ({battery_level}%)! Initiating landing sequence...")
                 break
             
+            print(controller.drone.get_height())
+            print(controller.drone.get_distance_tof())
+
             # Get frame with retry mechanism
             retry_count = 0
             frame = None
@@ -278,17 +308,23 @@ def navigation_thread(controller):
                             approach_start_time = time.time()
                     
                     elif not approach_complete:
-                        current_distance = controller.get_distance()
-                        if current_distance is None:
+                        current_distance_3D = controller.get_distance()
+                        # current_height = controller.drone.get_height()
+                        current_height = controller.drone.get_distance_tof()
+                        current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
+                        if current_distance_2D is None:
                             print("Lost marker distance during approach...")
                             time.sleep(0.1)
                             continue
-                            
-                        print(f"Current distance to marker: {current_distance:.1f}cm")
+                        
+                        print(f"Current 3D distance to marker: {current_distance_3D:.1f}cm")
+                        print(f"Current height: {current_height:.1f}cm")      
+                        print(f"Current 2D distance to marker: {current_distance_2D:.1f}cm")
                         
                         # Define safe approach distance (60cm from marker)
-                        safe_distance = max(int(current_distance - 50), 0)  # Keep 60cm safety margin
-                        
+                        # safe_distance = max(int(current_distance_3D - 50), 0)  # Keep 60cm safety margin
+                        safe_distance = max(int(current_distance_2D), 0)  # Keep 60cm safety margin
+
                         if safe_distance > 0:
                             print(f"Moving forward {safe_distance}cm to approach marker...")
                             controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
@@ -296,20 +332,21 @@ def navigation_thread(controller):
                             controller.drone.move_forward(safe_distance)  # Move exact distance
                             time.sleep(2)  # Wait for movement to complete
                             
-                            # Verify new position
+                            # Verify new position (TBC 29 Jan not necessary?)
                             new_distance = controller.get_distance()
                             if new_distance is not None:
-                                print(f"New distance to marker: {new_distance:.1f}cm")
+                                print(f"New 3D distance to marker: {new_distance:.1f}cm")
                         
                         print("Approach complete!")
                         controller.drone.send_rc_control(0, 0, 0, 0)
                         approach_complete = True
                         time.sleep(1)
-                        break   # Gab 24 Jan - Must exit the while loop! Or else the drone cannot see the marker directly below it and continues to search.
+                        break
                     
                     else:  # Both centering and approach are complete (TBC 23 Jan - does it ever come here?)
                         print("Initiating landing sequence...")
                         break
+
                 else: # if simulating
                     print("Marker Found, but not landing since not flying. Program continues.")
             
@@ -415,7 +452,7 @@ def main():
         print("Taking off...")
         if not NO_FLY:    
             controller.drone.takeoff()
-            execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
+            # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         else:
             print("Simulating takeoff. Drone will NOT fly.")
         time.sleep(2)
