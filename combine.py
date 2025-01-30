@@ -1,4 +1,5 @@
 # WORKS 23 JAN: Reads waypoint JSON file and executes it, then changes over to navigation_thread to use depth-mapping and lands on valid marker.
+# IMPT: Must be connected to drone to work!
 
 """
 Change Log:
@@ -21,7 +22,7 @@ from threading import Lock
 import time
 import os
 
-NO_FLY = False     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
+NO_FLY = True     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
 
 # Define configuration constants
 NETWORK_CONFIG = {
@@ -472,9 +473,10 @@ def main():
         if not NO_FLY:    
             controller.drone.takeoff()
             controller.drone.send_rc_control(0, 0, 0, 0)    # Added 30 Jan for stabilization (TBC)
-            # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
+            execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         else:
             print("Simulating takeoff. Drone will NOT fly.")
+            execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         time.sleep(2)
         
         ## MTD 1: Directly call function

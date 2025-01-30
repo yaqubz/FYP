@@ -7,7 +7,7 @@ Typically, drone only rotates and moves forward. It will only do otherwise for e
 
 CANNOT BE RUN DIRECTLY! Only here to have execute_waypoints imported
 
-TBC 23 Jan: utils or .utils - cannot find one solution to work for both running directly vs. as a module? Need to use .utils to be imported properly by other scripts.
+Since this is now a module in a package, run using `python -m PPFLY2.main` in the terminal.
 """
 
 from djitellopy import Tello
