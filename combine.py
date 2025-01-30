@@ -5,6 +5,7 @@ Change Log:
 # 23 Jan: Works even without ToF; Can run without flying using NO_FLY = True; Press q to exit and land
 # 24 Jan: Can stream and work over RPi17; TODO: video stream thread, ToF doesn't work well over RPi
 # 29 Jan: Rework 2D and 3D distance mapping, Calibration
+# 30 Jan: Distance calculation should be quite precise now, no need for hard-coded offsets. Will not work for victims not on the floor (TBC if need)
 """
 
 from PPFLY2.main import execute_waypoints
@@ -31,7 +32,7 @@ NETWORK_CONFIG = {
     'video_port': 11111
 }
 
-# def get_calibration_parameters():
+# def get_calibration_parameters(): # Original V1
 #     camera_matrix = np.array([
 #         [921.170702, 0.000000, 459.904354],
 #         [0.000000, 919.018377, 351.238301],
@@ -40,10 +41,37 @@ NETWORK_CONFIG = {
 #     dist_coeffs = np.array([0.036099, -0.028374, -0.003189, -0.001275, 0.000000])
 #     return camera_matrix, dist_coeffs
 
-def get_calibration_parameters(TELLO_NO: str = 'D'):  # TESTING 29 JAN
+# def get_calibration_parameters(TELLO_NO: str = 'D'):  # TESTING 29 JAN, V2
+#     # Construct file paths
+#     camera_matrix_path = os.path.join("calib_camera", f"camera_matrix_tello{TELLO_NO}.npy")
+#     dist_coeffs_path = os.path.join("calib_camera", f"dist_coeffs_tello{TELLO_NO}.npy")
+
+#     # Ensure files exist before loading
+#     if not os.path.exists(camera_matrix_path) or not os.path.exists(dist_coeffs_path):
+#         raise FileNotFoundError(f"Calibration files for Tello {TELLO_NO} not found.")
+
+#     # Load calibration parameters
+#     camera_matrix = np.load(camera_matrix_path)
+#     dist_coeffs = np.load(dist_coeffs_path)
+    
+#     return camera_matrix, dist_coeffs
+
+def get_calibration_parameters(TELLO_NO: str = 'D'): # BEST VERSION 30 JAN, V2.2 (to be tested)
+    """
+    Retrieves the camera matrix and distortion coefficients for the specified Tello drone.
+
+    Args:
+        TELLO_NO (str): Identifier for the Tello drone (e.g., 'D').
+
+    Returns:
+        tuple: Camera matrix and distortion coefficients.
+
+    Raises:
+        FileNotFoundError: If the calibration files for the specified Tello drone are not found.
+    """
     # Construct file paths
-    camera_matrix_path = os.path.join("Diagnostics", f"camera_matrix_tello{TELLO_NO}.npy")
-    dist_coeffs_path = os.path.join("Diagnostics", f"dist_coeffs_tello{TELLO_NO}.npy")
+    camera_matrix_path = os.path.join("calib_camera", f"camera_matrix_tello{TELLO_NO}.npy")
+    dist_coeffs_path = os.path.join("calib_camera", f"dist_coeffs_tello{TELLO_NO}.npy")
 
     # Ensure files exist before loading
     if not os.path.exists(camera_matrix_path) or not os.path.exists(dist_coeffs_path):
@@ -54,6 +82,15 @@ def get_calibration_parameters(TELLO_NO: str = 'D'):  # TESTING 29 JAN
     dist_coeffs = np.load(dist_coeffs_path)
     
     return camera_matrix, dist_coeffs
+
+# def get_calibration_parameters(calib_data_path = "./Search/calib_data/MultiMatrix.npz"):  # TESTING 29 JAN, V2
+#     calib_data = np.load(calib_data_path)
+#     cam_mat = calib_data["camMatrix"]
+#     dist_coef = calib_data["distCoef"]
+#     r_vectors = calib_data["rVector"]
+#     t_vectors = calib_data["tVector"]
+
+#     return cam_mat, dist_coef
 
 
 class CustomTello(Tello):
@@ -218,13 +255,14 @@ def navigation_thread(controller):
     # Initial movement
     print("Moving to initial altitude...")
     if not NO_FLY:
-        current_height = controller.drone.get_height()
-        desired_height = 100
-        if current_height < desired_height:
-            controller.drone.move_up(desired_height - current_height)    # TODO: Go to specific height?
-            new_height = controller.drone.get_height()
-        new_height = controller.drone.get_height()
-        print(f"Drone moved from {current_height:.0f}cm to {new_height:.0f}cm height.")    
+        # current_height = controller.drone.get_height()
+        # desired_height = 80
+        # if current_height < desired_height:
+        #     controller.drone.move_up(desired_height - current_height)    # TODO 30 Jan: Go to specific height?
+        #     new_height = controller.drone.get_height()
+        # new_height = controller.drone.get_height()
+        # print(f"Drone moved from {current_height:.0f}cm to {new_height:.0f}cm height.")    
+        controller.drone.move_up(20)
     time.sleep(2)
     
     # Approach sequence state
@@ -373,13 +411,7 @@ def navigation_thread(controller):
             dist = controller.get_ext_tof()
             
             # Draw navigation info on display frame
-            cv2.putText(display_frame, 
-                      f"ToF: {dist}mm", 
-                      (10, 30), 
-                      cv2.FONT_HERSHEY_SIMPLEX, 
-                      1, 
-                      (0, 255, 0), 
-                      2)
+            cv2.putText(display_frame, f"ToF: {dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             # Navigation logic
             if not marker_found:
@@ -410,27 +442,14 @@ def navigation_thread(controller):
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             # Resize depth_colormap to match frame dimensions
-            depth_colormap_resized = cv2.resize(depth_colormap, 
-                                              (display_frame.shape[1]//2, display_frame.shape[0]))
+            depth_colormap_resized = cv2.resize(depth_colormap, (display_frame.shape[1]//2, display_frame.shape[0]))
             
             # Create combined view with original frame and depth map side by side
             combined_view = np.hstack((display_frame, depth_colormap_resized))
             
             # Add labels
-            cv2.putText(combined_view, 
-                      "Live Feed", 
-                      (10, combined_view.shape[0] - 20), 
-                      cv2.FONT_HERSHEY_SIMPLEX, 
-                      0.7, 
-                      (255, 255, 255), 
-                      2)
-            cv2.putText(combined_view, 
-                      "Depth Map", 
-                      (display_frame.shape[1] + 10, combined_view.shape[0] - 20), 
-                      cv2.FONT_HERSHEY_SIMPLEX, 
-                      0.7, 
-                      (255, 255, 255), 
-                      2)
+            cv2.putText(combined_view, "Live Feed", (10, combined_view.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
+            cv2.putText(combined_view, "Depth Map", (display_frame.shape[1] + 10, combined_view.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             
             # Display combined view
             cv2.imshow("Drone Navigation", combined_view)
@@ -452,6 +471,7 @@ def main():
         print("Taking off...")
         if not NO_FLY:    
             controller.drone.takeoff()
+            controller.drone.send_rc_control(0, 0, 0, 0)    # Added 30 Jan for stabilization (TBC)
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         else:
             print("Simulating takeoff. Drone will NOT fly.")
