@@ -45,5 +45,6 @@ waypoints_commanded.json
 
 # CUSTOM: Ignore JSONs and Diagnostics/ Folder
 Diagnostics/
+calib_camera/calibration_images
 *.json
 !waypoints_samplesmall.json
