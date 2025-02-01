@@ -31,6 +31,7 @@ def check_args():
     """
     parser = argparse.ArgumentParser(description='Execute or Simulate waypoints for Tello drone')
     parser.add_argument('-sim', '--simulate', type=int, choices=[0, 1], help="Set simulation mode: 1 for True, 0 for False")
+    parser.add_argument('-f', '--filename', type=str, help='Input .json waypoints file (incl .json extension)')
     return parser.parse_args()
 
 def execute_waypoints(json_filename, drone, simulate = False):
@@ -153,27 +154,18 @@ def execute_waypoints(json_filename, drone, simulate = False):
         print(f"Error occurred: {e}")
     
     finally:
-        # if tello.is_flying:
-        #     print("Landing...")
-        #     tello.land()
-        #     end_batt = tello.get_battery()
-        #     end_time = time.time()
-        #     print(f"End Battery: {end_batt}%")
-        #     print(f"Mission Duration (s): {(end_time-start_time):.2f}, Battery Used (%): {start_batt-end_batt}, %/min: {((start_batt-end_batt)/(end_time-start_time)*60):.1f}")
-        #     time.sleep(DELAY)
         print("Mission completed! Not Landing.")
-        
-        # # Save waypoints to JSON file (DISABLED 23 JAN)
-        # with open("waypoints_commanded.json", "w") as f:
-        #     json.dump(waypoints, f, indent=4)
 
 if __name__ == "__main__":
 
-    # Check if -sim flag is set via CLI - optional
+    # Check if -sim and -f flags are set via CLI - optional
     args = check_args()
     if args.simulate is not None:
         SIMULATE = bool(args.simulate)  # Convert 0/1 to False/True
         print(f"[INFO] SIMULATE set to {SIMULATE}")
+    if args.filename is not None:
+        INPUT_JSON = args.filename  # Set filename
+        print(f"[INFO] INPUT_JSON set to {args.filename}")
 
     """
     IMPT: Use cases:
@@ -199,7 +191,7 @@ if __name__ == "__main__":
         print(f"Waypoints validated. Starting execution in {'simulation' if SIMULATE else 'real'} mode...")
         time.sleep(2)
         execute_waypoints(INPUT_JSON, tello, SIMULATE)
-        print("Landing Now.")
+        print(f"Landing Now. End Battery: {tello.get_battery()}%")
         tello.end()
     else:
         print("Validation failed. Please check warnings above. Exiting program.")
