@@ -24,21 +24,22 @@ sys.path.append(str(workspace_root))
 
 from UWB_ReadUDP import get_target_position # own custom library
 
-def parse_args():
-    parser = argparse.ArgumentParser(description='Execute waypoints for Tello drone')
-    parser.add_argument('--simulate', 
-                       action='store_true',
-                       help='Run in simulation mode')
+def check_args():
+    """
+    To set SIMULATE flag via CLI (optional)
+    Otherwise, it will use the SIMULATE option under .constants
+    """
+    parser = argparse.ArgumentParser(description='Execute or Simulate waypoints for Tello drone')
+    parser.add_argument('-sim', '--simulate', type=int, choices=[0, 1], help="Set simulation mode: 1 for True, 0 for False")
     return parser.parse_args()
 
 def execute_waypoints(json_filename, drone, simulate = False):
     """
     Connect, takeoff and landing should be done outside this function.
     """
-    global LAND_ID, FLYING_STATE, waypoints
+    global LAND_ID, waypoints
     global start_batt, end_batt
     tello = MockTello() if simulate else drone
-    TAKEOFF_DELAY = 0 if simulate else 3 
     DELAY = 0 if simulate else 2
     
     try:      
@@ -167,12 +168,17 @@ def execute_waypoints(json_filename, drone, simulate = False):
         #     json.dump(waypoints, f, indent=4)
 
 if __name__ == "__main__":
-    # args = parse_args()
-    # SIMULATE = args.simulate    # Override SIMULATE from constants.py with command line argument; Disabled 23 Jan
 
+    # Check if -sim flag is set via CLI - optional
+    args = check_args()
+    if args.simulate is not None:
+        SIMULATE = bool(args.simulate)  # Convert 0/1 to False/True
+        print(f"[INFO] SIMULATE set to {SIMULATE}")
 
     """
-    IMPT: This should not typically run as the main code (still figuring out 23 Jan), but only if required.
+    IMPT: Use cases:
+    1. (most likely scenario) main() will NOT be called directly, while execute_waypoints() will be imported
+    2. main() can also be called directly by main_run_sequence.bat
     """
 
     tello = MockTello() if SIMULATE else Tello()

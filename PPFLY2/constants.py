@@ -7,7 +7,6 @@ INPUT_JSON = 'waypoint20x20.json'
 UWBTAG_ID = 1
 
 # Do not touch Params
-FLYING_STATE = False
 waypoints = []      # to store executed waypoints and drone's current position
 waypoints_UWB = []  # to store UWB recorded waypoints
 
