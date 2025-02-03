@@ -21,10 +21,21 @@ import threading
 from threading import Lock
 import time
 import os
+import logging  # in decreasing log level: debug > info > warning > error > critical
 
 NO_FLY = True     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
 
-# Define configuration constants
+# Logging handlers and format
+file_handler = logging.FileHandler("log.log", mode='w')  # Log to a file (overwrite each run)
+console_handler = logging.StreamHandler()  # Log to the terminal
+
+formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
+file_handler.setFormatter(formatter)
+console_handler.setFormatter(formatter)
+
+logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+
+# Define network configuration constants
 NETWORK_CONFIG = {
     # 'host': '192.168.0.117',  # if connected through RPi 17
     'host': '192.168.10.1',     # if connected directly through WiFi
@@ -119,7 +130,7 @@ class DroneController:
         # Initialize Tello
         self.drone = CustomTello(network_config)
         self.drone.connect()
-        print(f"Battery Level: {self.drone.get_battery()}%")
+        logging.info(f"Battery Level: {self.drone.get_battery()}%")
         self.drone.streamon()
         
         # Initialize MiDaS model
@@ -147,17 +158,18 @@ class DroneController:
         self.valid_ids = set(range(1, 12))  # Temporary 29 Jan
         self.invalid_ids = set(range(12, 15))
         self.marker_positions = {}
-        
+         
         # Navigation parameters
         self.move_speed = 20
         self.yaw_speed = 50
+        self.forward_tof_dist = None # to be updated by subthread
 
     def get_ext_tof(self) -> int:
         """Get ToF sensor reading"""
         response = self.drone.send_read_command("EXT tof?")
         try:
             return int(response.split()[1])
-        except ValueError:
+        except ValueError or IndexError:    # IndexError if using threading and the response is not as intended
             return 8888
             
     def process_depth_map(self, frame):
@@ -208,7 +220,7 @@ class DroneController:
                     # Store marker position and distance
                     marker_center = np.mean(corners[i][0], axis=0)
                     self.set_marker_x(marker_center[0])
-                    print(marker_center)
+                    logging.info(f"Marker Centre: {marker_center}")
                     self.set_distance(euclidean_distance)
                     return True, corners[i], marker_id[0], rvecs[0], tvecs[0]
         self.set_distance(None)
@@ -241,25 +253,38 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
     
     return frame
 
+def tof_update_thread(controller, Hz: float = 2):
+    """
+    Subthread for updating forward ToF reading
+    Implemented 3 Feb, works but may block other responses from drone
+    May work better with RPi? 
+    Possible solution: Find optimal refresh rate? Use both subthread AND main thread?
+    
+    """
+    while True:
+        controller.forward_tof_dist = controller.get_ext_tof()
+        time.sleep(1/Hz)
+
+
 def navigation_thread(controller):
     """Main navigation thread combining depth mapping and marker detection"""
-    print("Starting navigation with depth mapping...")
+    logging.info("Starting navigation with depth mapping...")
     
     # Create single window for combined view
     cv2.namedWindow("Drone Navigation", cv2.WINDOW_NORMAL)
     
     # Ensure frame reader is initialized
     frame_reader = controller.drone.get_frame_read()
-    print("Initializing Camera...")
+    logging.info("Initializing Camera...")
     time.sleep(2)  # Give time for camera to initialize
     
     # Initial movement
-    print("Moving to initial altitude...")
+    logging.info("Moving to initial altitude...")
     if not NO_FLY:
         # current_height = controller.drone.get_height()
         # desired_height = 80
         # if current_height < desired_height:
-        #     controller.drone.move_up(desired_height - current_height)    # TODO 30 Jan: Go to specific height?
+        #     controller.drone.move_up(desired_height - current_height)    # TODO 30 Jan: How to go to specific height?
         #     new_height = controller.drone.get_height()
         # new_height = controller.drone.get_height()
         # print(f"Drone moved from {current_height:.0f}cm to {new_height:.0f}cm height.")    
@@ -276,11 +301,8 @@ def navigation_thread(controller):
             # Check battery level
             battery_level = controller.drone.get_battery()
             if battery_level < 10:  # Critical battery threshold
-                print(f"Battery level critical ({battery_level}%)! Initiating landing sequence...")
+                logging.warning(f"Battery level critical ({battery_level}%)! Initiating landing sequence...")
                 break
-            
-            print(controller.drone.get_height())
-            print(controller.drone.get_distance_tof())
 
             # Get frame with retry mechanism
             retry_count = 0
@@ -288,12 +310,12 @@ def navigation_thread(controller):
             while frame is None and retry_count < 3:
                 frame = frame_reader.frame
                 if frame is None:
-                    print("Frame capture failed, retrying...")
+                    logging.warning("Frame capture failed, retrying...")
                     time.sleep(0.1)
                     retry_count += 1
             
             if frame is None:
-                print("Failed to capture frame after retries")
+                logging.warning("Failed to capture frame after retries")
                 continue
                 
             # Create a copy of frame for visualization
@@ -323,7 +345,7 @@ def navigation_thread(controller):
                 # Draw pose estimation
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
                 
-                print(f"Valid marker {marker_id} detected! Switching to approach sequence...")
+                logging.info(f"Valid marker {marker_id} detected! Switching to approach sequence...")
                 
                 # Center on the marker
                 frame_center = frame.shape[1] / 2
@@ -338,34 +360,33 @@ def navigation_thread(controller):
                             # Calculate yaw speed based on error
                             yaw_speed = int(np.clip(x_error / 10, -20, 20))
                             controller.drone.send_rc_control(0, 0, 0, yaw_speed)
-                            print(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
+                            logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
                         else:
-                            print("Marker centered! Starting approach...")
+                            logging.info("Marker centered! Starting approach...")
                             controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
                             time.sleep(1)  # Stabilize
                             centering_complete = True
-                            approach_start_time = time.time()
                     
                     elif not approach_complete:
                         current_distance_3D = controller.get_distance()
                         # current_height = controller.drone.get_height()
-                        current_height = controller.drone.get_distance_tof()
+                        current_height = controller.drone.get_distance_tof()    # may not work if floor is not even
                         current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
                         if current_distance_2D is None:
-                            print("Lost marker distance during approach...")
+                            logging.info("Lost marker distance during approach...")
                             time.sleep(0.1)
                             continue
                         
-                        print(f"Current 3D distance to marker: {current_distance_3D:.1f}cm")
-                        print(f"Current height: {current_height:.1f}cm")      
-                        print(f"Current 2D distance to marker: {current_distance_2D:.1f}cm")
+                        logging.info(f"Current 3D distance to marker: {current_distance_3D:.1f}cm")
+                        logging.info(f"Current height: {current_height:.1f}cm")      
+                        logging.info(f"Current 2D distance to marker: {current_distance_2D:.1f}cm")
                         
                         # Define safe approach distance (60cm from marker)
                         # safe_distance = max(int(current_distance_3D - 50), 0)  # Keep 60cm safety margin
                         safe_distance = max(int(current_distance_2D), 0)  # Keep 60cm safety margin
 
                         if safe_distance > 0:
-                            print(f"Moving forward {safe_distance}cm to approach marker...")
+                            logging.info(f"Moving forward {safe_distance}cm to approach marker...")
                             controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
                             time.sleep(1)  # Stabilize
                             controller.drone.move_forward(safe_distance)  # Move exact distance
@@ -374,20 +395,20 @@ def navigation_thread(controller):
                             # Verify new position (TBC 29 Jan not necessary?)
                             new_distance = controller.get_distance()
                             if new_distance is not None:
-                                print(f"New 3D distance to marker: {new_distance:.1f}cm")
+                                logging.info(f"New 3D distance to marker: {new_distance:.1f}cm")
                         
-                        print("Approach complete!")
+                        logging.info("Approach complete!")
                         controller.drone.send_rc_control(0, 0, 0, 0)
                         approach_complete = True
                         time.sleep(1)
                         break
                     
                     else:  # Both centering and approach are complete (TBC 23 Jan - does it ever come here?)
-                        print("Initiating landing sequence...")
+                        logging.info("Initiating landing sequence...")
                         break
 
                 else: # if simulating
-                    print("Marker Found, but not landing since not flying. Program continues.")
+                    logging.info("Marker Found, but not landing since not flying. Program continues.")
             
             # Split depth map into regions for navigation
             h, w = depth_colormap.shape[:2]
@@ -409,7 +430,8 @@ def navigation_thread(controller):
             blue_right = np.sum((right_region[:, :, 0] > 150) & (right_region[:, :, 2] < 50))
             
             # Get ToF distance
-            dist = controller.get_ext_tof()
+            dist = controller.get_ext_tof()       ## COMMENTED OUT 3 FEB in favour of threading (TBC: may be good to have both?)
+            dist = controller.forward_tof_dist
             
             # Draw navigation info on display frame
             cv2.putText(display_frame, f"ToF: {dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -422,19 +444,19 @@ def navigation_thread(controller):
                         controller.drone.send_rc_control(0, 0, 0, -controller.yaw_speed)
                         cv2.putText(display_frame, "Turning Left", (10, 60), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                        print("[INFO] Turning Left")
+                        logging.info("Turning Left")
                     else:
                         controller.drone.send_rc_control(0, 0, 0, controller.yaw_speed)
                         cv2.putText(display_frame, "Turning Right", (10, 60), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                        print("[INFO] Turning Left")
+                        logging.info("Turning Right")
                 else:
                     if blue_center > red_center and dist <= 600:
                         if not NO_FLY:
                             controller.drone.rotate_clockwise(135)
                         cv2.putText(display_frame, "Avoiding Obstacle", (10, 60), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                        print("[INFO] Avoiding Obstacle")
+                        logging.info("Avoiding Obstacle")
                         time.sleep(1)  # Stabilize
 
                     else:
@@ -457,29 +479,34 @@ def navigation_thread(controller):
             
             # If 'q' is pressed, just continue searching
             if cv2.waitKey(1) & 0xFF == ord('q'):
-                print("Exiting. Drone landing.")
+                logging.info("Exiting. Drone landing.")
                 # controller.drone.land()
                 break
                 
         except Exception as e:
-            print(f"Error in navigation: {e}")
+            logging.warning(f"Error in navigation: {e}. Continuing navigation.")
             # Don't cleanup or break - continue searching
             continue
 
 def main():
     controller = DroneController(NETWORK_CONFIG)
     try:
-        print("Taking off...")
+        logging.info("Taking off...")
         if not NO_FLY:    
             controller.drone.takeoff()
             controller.drone.send_rc_control(0, 0, 0, 0)    # Added 30 Jan for stabilization (TBC)
             execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         else:
-            print("Simulating takeoff. Drone will NOT fly.")
+            logging.info("Simulating takeoff. Drone will NOT fly.")
             execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         time.sleep(2)
         
         ## MTD 1: Directly call function
+        tof_thread = threading.Thread(target=tof_update_thread, args=(controller,2))
+        tof_thread.daemon = True     ## Daemon threads run in the background, and are killed automatically when your program quits. 
+        tof_thread.start()
+
+
         navigation_thread(controller)
 
         ## MTD 2: Start navigation thread (Gab TBC 23 Jan: Does it really need a thread? More like a thread for video streaming maybe. Same performance.)
@@ -488,13 +515,13 @@ def main():
         # nav_thread.start()
         # nav_thread.join()   # instructs the main thread to wait until the target thread finishes its execution before proceeding. 
 
-        print("Actually landing for real.")
+        logging.info("Actually landing for real.")
         controller.drone.end()      # Replace all land() with end() for consistency? Fundamentally different but practically same. Just need one end() after exiting nav_thread.
         cv2.destroyAllWindows()
         cv2.waitKey(1)
     
     except Exception as e:
-        print(f"Error in main: {e}")
+        logging.error(f"Error in main: {e}")
 
 if __name__ == "__main__":
     main()
