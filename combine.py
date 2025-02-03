@@ -33,7 +33,7 @@ formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
 file_handler.setFormatter(formatter)
 console_handler.setFormatter(formatter)
 
-logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
 
 # Define network configuration constants
 NETWORK_CONFIG = {
@@ -157,12 +157,16 @@ class DroneController:
         self.movement_completed = False
         self.valid_ids = set(range(1, 12))  # Temporary 29 Jan
         self.invalid_ids = set(range(12, 15))
+        self.exit_ids = set(range(50, 100)) # Added 3 Feb - for drone to avoid exiting search area
+        self.exit_detected = False
         self.marker_positions = {}
          
         # Navigation parameters
         self.move_speed = 20
         self.yaw_speed = 50
         self.forward_tof_dist = None # to be updated by subthread
+
+        self.target_yaw = None
 
     def get_ext_tof(self) -> int:
         """Get ToF sensor reading"""
@@ -200,29 +204,54 @@ class DroneController:
         with self.marker_x_lock:
             self.marker_x = x
 
-    def detect_markers(self, frame, marker_size=14.0):  # 24 Jan: Might need to recalibrate for 14cm
+    def detect_markers(self, frame, marker_size=14.0):
         """Detect ArUco markers and estimate pose"""
         camera_matrix, dist_coeffs = get_calibration_parameters()
         aruco_dict = aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_250)
         parameters = aruco.DetectorParameters()
         corners, ids, rejected = aruco.detectMarkers(frame, aruco_dict, parameters=parameters)
         
+        # Reset target yaw when no markers detected
+        self.target_yaw = None
+
         if ids is not None:
-            for i, marker_id in enumerate(ids):
-                if marker_id[0] in self.valid_ids:
-                    # Get pose estimation
-                    rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
-                        corners[i].reshape(1, 4, 2), marker_size, camera_matrix, dist_coeffs
-                    )
-                    # Calculate Euclidean distance
+            detected_ids = ids.flatten()
+            logging.debug(f"Detected IDs: {detected_ids}")
+
+            # Check for exit markers
+            if set(detected_ids).intersection(self.exit_ids):
+                self.exit_detected = True
+                logging.info("Exit marker detected!")
+
+            # Process markers for pose and yaw calculation
+            for i, marker_id in enumerate(detected_ids):
+                # Estimate pose for ALL markers
+                rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
+                    corners[i].reshape(1, 4, 2), marker_size, camera_matrix, dist_coeffs
+                )
+
+                # If it's a valid marker, store its info
+                if marker_id in self.valid_ids:
                     x, y, z = tvecs[0][0]
                     euclidean_distance = np.sqrt(x*x + y*y + z*z)
-                    # Store marker position and distance
                     marker_center = np.mean(corners[i][0], axis=0)
+                    
+                    # Store basic marker info
                     self.set_marker_x(marker_center[0])
-                    logging.info(f"Marker Centre: {marker_center}")
                     self.set_distance(euclidean_distance)
-                    return True, corners[i], marker_id[0], rvecs[0], tvecs[0]
+                    logging.info(f"Marker Centre: {marker_center}")
+
+                    return True, corners[i], marker_id, rvecs[0], tvecs[0]  # Return only the FIRST valid marker
+
+                # If it's an exit marker, compute its yaw
+                elif marker_id in self.exit_ids:
+                    # Convert rotation vector to rotation matrix
+                    R, _ = cv2.Rodrigues(rvecs[0])
+                    # Calculate yaw (rotation around Z-axis)
+                    yaw = np.arctan2(R[1, 0], R[0, 0])  # Yaw in radians
+                    self.target_yaw = np.degrees(yaw)
+                    logging.info(f"Exit marker yaw: {self.target_yaw:.2f}°")
+
         self.set_distance(None)
         self.set_marker_x(None)
         return False, None, None, None, None
@@ -405,6 +434,31 @@ def navigation_thread(controller):
                 else: # if simulating
                     logging.info("Marker Found, but not landing since not flying. Program continues.")
             
+            elif controller.exit_detected:  ## TO TEST 4 Feb
+                    logging.debug("Exit detected. Turning Around...") 
+                    if controller.target_yaw is not None:
+                        # Get current drone yaw (e.g., from IMU)
+                        current_yaw = controller.drone.get_yaw() 
+                        logging.debug(f"Current yaw: {current_yaw:.2f}°")
+
+                        # Calculate shortest turn angle
+                        delta_yaw = controller.target_yaw - current_yaw
+                        delta_yaw = (delta_yaw + 180) % 360 - 180  # Normalize to [-180, 180]
+                        
+                        # Turn the drone (TBC direction)
+                        if not NO_FLY:
+                            if delta_yaw > 0:
+                                controller.drone.rotate_clockwise(int(delta_yaw))
+                            else:
+                                controller.drone.rotate_counter_clockwise(-int(delta_yaw))
+                        logging.info(f"Turning {delta_yaw:.2f}° to align with exit marker")
+                        
+                        # Reset exit state
+                        controller.exit_detected = False
+                        controller.target_yaw = None
+                    else:
+                        logging.warning("Exit detected but no target yaw!")
+
             # Split depth map into regions for navigation
             h, w = depth_colormap.shape[:2]
             left_region = depth_colormap[:, :w//3]
