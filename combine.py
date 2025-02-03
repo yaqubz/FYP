@@ -369,8 +369,7 @@ def navigation_thread(controller):
                     
                     elif not approach_complete:
                         current_distance_3D = controller.get_distance()
-                        # current_height = controller.drone.get_height()
-                        current_height = controller.drone.get_distance_tof()    # may not work if floor is not even
+                        current_height = controller.drone.get_distance_tof()    # may not work if floor is not even (alt: current_height = controller.drone.get_height())
                         current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
                         if current_distance_2D is None:
                             logging.info("Lost marker distance during approach...")
@@ -380,16 +379,12 @@ def navigation_thread(controller):
                         logging.info(f"Current 3D distance to marker: {current_distance_3D:.1f}cm")
                         logging.info(f"Current height: {current_height:.1f}cm")      
                         logging.info(f"Current 2D distance to marker: {current_distance_2D:.1f}cm")
-                        
-                        # Define safe approach distance (60cm from marker)
-                        # safe_distance = max(int(current_distance_3D - 50), 0)  # Keep 60cm safety margin
-                        safe_distance = max(int(current_distance_2D), 0)  # Keep 60cm safety margin
 
-                        if safe_distance > 0:
-                            logging.info(f"Moving forward {safe_distance}cm to approach marker...")
+                        if current_distance_2D > 0:
+                            logging.info(f"Moving forward {current_distance_2D}cm to approach marker...")
                             controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
                             time.sleep(1)  # Stabilize
-                            controller.drone.move_forward(safe_distance)  # Move exact distance
+                            controller.drone.move_forward(current_distance_2D)  # Move exact distance
                             time.sleep(2)  # Wait for movement to complete
                             
                             # Verify new position (TBC 29 Jan not necessary?)
@@ -516,7 +511,7 @@ def main():
         # nav_thread.join()   # instructs the main thread to wait until the target thread finishes its execution before proceeding. 
 
         logging.info("Actually landing for real.")
-        controller.drone.end()      # Replace all land() with end() for consistency? Fundamentally different but practically same. Just need one end() after exiting nav_thread.
+        controller.drone.end()
         cv2.destroyAllWindows()
         cv2.waitKey(1)
     
