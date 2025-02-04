@@ -23,7 +23,8 @@ import time
 import os
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
-NO_FLY = True     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
+NO_FLY = False     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
+EXTRA_HEIGHT = 0 #cm
 
 # Logging handlers and format
 file_handler = logging.FileHandler("log.log", mode='w')  # Log to a file (overwrite each run)
@@ -293,6 +294,7 @@ def tof_update_thread(controller, Hz: float = 2):
     while True:
         controller.forward_tof_dist = controller.get_ext_tof()
         time.sleep(1/Hz)
+        logging.debug(f"controller.forward_tof_dist: {controller.forward_tof_dist}")
 
 
 def navigation_thread(controller):
@@ -317,7 +319,7 @@ def navigation_thread(controller):
         #     new_height = controller.drone.get_height()
         # new_height = controller.drone.get_height()
         # print(f"Drone moved from {current_height:.0f}cm to {new_height:.0f}cm height.")    
-        controller.drone.move_up(20)
+        controller.drone.move_up(20 + EXTRA_HEIGHT)
     time.sleep(2)
     
     # Approach sequence state
@@ -398,7 +400,7 @@ def navigation_thread(controller):
                     
                     elif not approach_complete:
                         current_distance_3D = controller.get_distance()
-                        current_height = controller.drone.get_distance_tof()    # may not work if floor is not even (alt: current_height = controller.drone.get_height())
+                        current_height = controller.drone.get_distance_tof()-EXTRA_HEIGHT    # may not work if floor is not even (alt: current_height = controller.drone.get_height())
                         current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
                         if current_distance_2D is None:
                             logging.info("Lost marker distance during approach...")
@@ -410,10 +412,10 @@ def navigation_thread(controller):
                         logging.info(f"Current 2D distance to marker: {current_distance_2D:.1f}cm")
 
                         if current_distance_2D > 0:
-                            logging.info(f"Moving forward {current_distance_2D}cm to approach marker...")
+                            logging.info(f"Moving forward {int(current_distance_2D)}cm to approach marker...")
                             controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
                             time.sleep(1)  # Stabilize
-                            controller.drone.move_forward(current_distance_2D)  # Move exact distance
+                            controller.drone.move_forward(int(current_distance_2D))  # Move exact distance
                             time.sleep(2)  # Wait for movement to complete
                             
                             # Verify new position (TBC 29 Jan not necessary?)
@@ -435,29 +437,36 @@ def navigation_thread(controller):
                     logging.info("Marker Found, but not landing since not flying. Program continues.")
             
             elif controller.exit_detected:  ## TO TEST 4 Feb
+                    # This condition is placed after marker_detected but before depth mapping 
                     logging.debug("Exit detected. Turning Around...") 
-                    if controller.target_yaw is not None:
-                        # Get current drone yaw (e.g., from IMU)
-                        current_yaw = controller.drone.get_yaw() 
-                        logging.debug(f"Current yaw: {current_yaw:.2f}°")
 
-                        # Calculate shortest turn angle
-                        delta_yaw = controller.target_yaw - current_yaw
-                        delta_yaw = (delta_yaw + 180) % 360 - 180  # Normalize to [-180, 180]
+                    ## MTD 1: Simple U-turn when detected
+                    if not NO_FLY:
+                        controller.drone.rotate_clockwise(180)
+                    controller.exit_detected = False 
+                    ## MTD 2: TESTING "FORCE-FIELD METHOD"
+                    # if controller.target_yaw is not None:
+                    #     # Get current drone yaw (e.g., from IMU)
+                    #     current_yaw = controller.drone.get_yaw() 
+                    #     logging.debug(f"Current yaw: {current_yaw:.2f}°")
+
+                    #     # Calculate shortest turn angle
+                    #     delta_yaw = controller.target_yaw - current_yaw
+                    #     delta_yaw = (delta_yaw + 180) % 360 - 180  # Normalize to [-180, 180]
                         
-                        # Turn the drone (TBC direction)
-                        if not NO_FLY:
-                            if delta_yaw > 0:
-                                controller.drone.rotate_clockwise(int(delta_yaw))
-                            else:
-                                controller.drone.rotate_counter_clockwise(-int(delta_yaw))
-                        logging.info(f"Turning {delta_yaw:.2f}° to align with exit marker")
+                    #     # Turn the drone (TBC direction)
+                    #     if not NO_FLY:
+                    #         if delta_yaw > 0:
+                    #             controller.drone.rotate_clockwise(int(delta_yaw))
+                    #         else:
+                    #             controller.drone.rotate_counter_clockwise(-int(delta_yaw))
+                    #     logging.info(f"Turning {delta_yaw:.2f}° to align with exit marker")
                         
-                        # Reset exit state
-                        controller.exit_detected = False
-                        controller.target_yaw = None
-                    else:
-                        logging.warning("Exit detected but no target yaw!")
+                    #     # Reset exit state
+                    #     controller.exit_detected = False
+                    #     controller.target_yaw = None
+                    # else:
+                    #     logging.warning("Exit detected but no target yaw!")
 
             # Split depth map into regions for navigation
             h, w = depth_colormap.shape[:2]
@@ -480,12 +489,16 @@ def navigation_thread(controller):
             
             # Get ToF distance
             dist = controller.get_ext_tof()       ## COMMENTED OUT 3 FEB in favour of threading (TBC: may be good to have both?)
-            dist = controller.forward_tof_dist
+            # dist = controller.forward_tof_dist
+            logging.debug(f"ToF Dist: {dist}")
             
             # Draw navigation info on display frame
             cv2.putText(display_frame, f"ToF: {dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             # Navigation logic
+            # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces.
+            # To be more conservative, can consider checking ToF before depth map.
+
             if not marker_found:
                 if red_center > blue_center:
                     # Obstacle ahead - turn towards more open space
@@ -512,6 +525,7 @@ def navigation_thread(controller):
                         controller.drone.send_rc_control(0, controller.move_speed, 0, 0)
                         cv2.putText(display_frame, "Moving Forward", (10, 60), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                        logging.info("Moving Forward")
             
             # Resize depth_colormap to match frame dimensions
             depth_colormap_resized = cv2.resize(depth_colormap, (display_frame.shape[1]//2, display_frame.shape[0]))
@@ -544,16 +558,16 @@ def main():
         if not NO_FLY:    
             controller.drone.takeoff()
             controller.drone.send_rc_control(0, 0, 0, 0)    # Added 30 Jan for stabilization (TBC)
-            execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
+            # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
             execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         time.sleep(2)
         
         ## MTD 1: Directly call function
-        tof_thread = threading.Thread(target=tof_update_thread, args=(controller,2))
-        tof_thread.daemon = True     ## Daemon threads run in the background, and are killed automatically when your program quits. 
-        tof_thread.start()
+        # tof_thread = threading.Thread(target=tof_update_thread, args=(controller,2))
+        # tof_thread.daemon = True     ## Daemon threads run in the background, and are killed automatically when your program quits. 
+        # tof_thread.start()
 
 
         navigation_thread(controller)
