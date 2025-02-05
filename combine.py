@@ -24,7 +24,7 @@ import os
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
 NO_FLY = False     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
-EXTRA_HEIGHT = 0 #cm
+EXTRA_HEIGHT = 0   # cm; for demo purpose if obstacle is higher than the ground 
 
 # Logging handlers and format
 file_handler = logging.FileHandler("log.log", mode='w')  # Log to a file (overwrite each run)
@@ -125,13 +125,108 @@ class CustomTello(Tello):
         
         # Override video port
         self.vs_udp_port = self.VS_UDP_PORT
+    
+    def go_to_height(self, height: int) -> None:
+        """
+        :param: height: Desired height in cm
+        :return: None
+        """
+        current_height_tof = self.get_distance_tof()
+        current_height_ = self.get_height()
+        diff = height - current_height_tof
+        
+        if diff >= 20:
+            self.move_up(diff)  # diff is already positive
+        elif diff <= -20:  # Changed from abs(diff) <= -20
+            self.move_down(abs(diff))  # need abs() since move_down needs positive value
+        elif abs(diff) < 5:    # Close enough, accepted
+            print(f"Height diff {diff}cm is less than 5cm. Moving on.")
+        elif abs(diff) < 20:    # Resets, recurses
+            self.move_up(30)
+            self.go_to_height(height)
+                
+        final_height_tof = self.get_distance_tof()
+        print(f"go_to_height {height}cm complete. Final height {final_height_tof}cm.")
+            
+    def go_to_height_PID(self, target_height: int, timeout: float = 10.0) -> bool:      # TESTING 5 FEB
+        """
+        Control drone height using PID control until target height is reached within tolerance
+        
+        Args:
+            target_height: Desired height in cm
+            timeout: Maximum time to attempt height control in seconds
+        Returns:
+            bool: True if target height was achieved, False if timeout occurred
+        """
+        # PID constants - these may need tuning
+        Kp = 0.3  # Proportional gain
+        Ki = 0.1  # Integral gain
+        Kd = 0.1  # Derivative gain
+        
+        # Control parameters
+        tolerance = 5  # Acceptable error in cm
+        min_speed = 20  # Minimum speed for drone movement
+        max_speed = 100  # Maximum speed for drone movement
+        dt = 0.1  # Time step in seconds
+        
+        # Initialize PID variables
+        integral = 0
+        prev_error = 0
+        start_time = time.time()
+        
+        while True:
+            # Check timeout
+            if time.time() - start_time > timeout:
+                logging.warning(f"Height control timeout after {timeout} seconds")
+                return False
+                
+            # Get current height
+            current_height = self.get_distance_tof()
+            error = target_height - current_height
+            
+            # Check if we're within tolerance
+            if abs(error) < tolerance:
+                logging.info(f"Target height achieved. Current: {current_height}cm, Target: {target_height}cm")
+                return True
+                
+            # Calculate PID terms
+            integral += error * dt
+            derivative = (error - prev_error) / dt
+            
+            # Calculate control output
+            output = (Kp * error) + (Ki * integral) + (Kd * derivative)
+            
+            # Convert output to speed command
+            speed = int(abs(output))
+            speed = max(min_speed, min(speed, max_speed))  # Clamp speed between min and max
+            
+            # Apply control
+            try:
+                if output > 0:
+                    if speed >= min_speed:
+                        self.move_up(speed)
+                else:
+                    if speed >= min_speed:
+                        self.move_down(speed)
+            except Exception as e:
+                logging.error(f"Error during height adjustment: {e}")
+                return False
+                
+            # Update previous error
+            prev_error = error
+            
+            # Small delay to prevent overwhelming the drone
+            time.sleep(dt)
+            
+            # Log progress
+            logging.info(f"Current height: {current_height}cm, Error: {error}cm, Speed: {speed}")
 
 class DroneController:
     def __init__(self, network_config):
         # Initialize Tello
         self.drone = CustomTello(network_config)
         self.drone.connect()
-        logging.info(f"Battery Level: {self.drone.get_battery()}%")
+        logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
         self.drone.streamon()
         
         # Initialize MiDaS model
@@ -169,7 +264,7 @@ class DroneController:
 
         self.target_yaw = None
 
-    def get_ext_tof(self) -> int:
+    def get_ext_tof(self) -> int:   # TBC 5 FEB should put under CustomTello instead of Controller?
         """Get ToF sensor reading"""
         response = self.drone.send_read_command("EXT tof?")
         try:
@@ -400,37 +495,41 @@ def navigation_thread(controller):
                     
                     elif not approach_complete:
                         current_distance_3D = controller.get_distance()
-                        current_height = controller.drone.get_distance_tof()-EXTRA_HEIGHT    # may not work if floor is not even (alt: current_height = controller.drone.get_height())
-                        current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
-                        if current_distance_2D is None:
-                            logging.info("Lost marker distance during approach...")
+                        if current_distance_3D is None:
+                            logging.info("Lost marker during approach...")
                             time.sleep(0.1)
                             continue
-                        
-                        logging.info(f"Current 3D distance to marker: {current_distance_3D:.1f}cm")
-                        logging.info(f"Current height: {current_height:.1f}cm")      
-                        logging.info(f"Current 2D distance to marker: {current_distance_2D:.1f}cm")
 
-                        if current_distance_2D > 0:
-                            logging.info(f"Moving forward {int(current_distance_2D)}cm to approach marker...")
-                            controller.drone.send_rc_control(0, 0, 0, 0)  # Stop any existing movement
-                            time.sleep(1)  # Stabilize
-                            controller.drone.move_forward(int(current_distance_2D))  # Move exact distance
-                            time.sleep(2)  # Wait for movement to complete
-                            
-                            # Verify new position (TBC 29 Jan not necessary?)
+                        current_height = controller.drone.get_distance_tof() - EXTRA_HEIGHT
+                        current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
+
+                        logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n 
+                                     Drone height: {current_height:.1f}cm \n 
+                                     2D distance to marker: {current_distance_2D:.1f}cm")
+
+                        if current_distance_2D >= 300:
+                            step_dist = current_distance_2D - 150   # last step will be at least (300-150)=150
+                            logging.info(f"Distance too large. Stepping forward {int(current_distance_2D)}cm to approach marker...")
+                            controller.drone.send_rc_control(0, 0, 0, 0)
+                            controller.drone.move_forward(int(step_dist))
+
+                            time.sleep(1)  # Wait for movement to complete
                             new_distance = controller.get_distance()
                             if new_distance is not None:
-                                logging.info(f"New 3D distance to marker: {new_distance:.1f}cm")
-                        
+                                logging.info(f"New 3D distance to marker: {new_distance:.1f}cm. Recentering...")
+                            else:
+                                logging.info("Lost marker during approach step...")
+
+                        elif current_distance_2D > 0 and current_distance_2D < 300: # FINAL APPROACH 5 Feb
+                            logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
+                            controller.drone.send_rc_control(0, 0, 0, 0) 
+                            controller.drone.move_forward(int(current_distance_2D))
+
+
                         logging.info("Approach complete!")
                         controller.drone.send_rc_control(0, 0, 0, 0)
                         approach_complete = True
                         time.sleep(1)
-                        break
-                    
-                    else:  # Both centering and approach are complete (TBC 23 Jan - does it ever come here?)
-                        logging.info("Initiating landing sequence...")
                         break
 
                 else: # if simulating
@@ -444,6 +543,7 @@ def navigation_thread(controller):
                     if not NO_FLY:
                         controller.drone.rotate_clockwise(180)
                     controller.exit_detected = False 
+                    
                     ## MTD 2: TESTING "FORCE-FIELD METHOD"
                     # if controller.target_yaw is not None:
                     #     # Get current drone yaw (e.g., from IMU)
@@ -543,7 +643,6 @@ def navigation_thread(controller):
             # If 'q' is pressed, just continue searching
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 logging.info("Exiting. Drone landing.")
-                # controller.drone.land()
                 break
                 
         except Exception as e:
@@ -557,8 +656,12 @@ def main():
         logging.info("Taking off...")
         if not NO_FLY:    
             controller.drone.takeoff()
+
+            if not controller.drone.go_to_height_PID(120):  # Testing 5 Feb for going to height
+                controller.drone.go_to_height(100)          # Testing 5 Feb for going to height
+
             controller.drone.send_rc_control(0, 0, 0, 0)    # Added 30 Jan for stabilization (TBC)
-            # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
+            execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
             execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
@@ -579,6 +682,7 @@ def main():
         # nav_thread.join()   # instructs the main thread to wait until the target thread finishes its execution before proceeding. 
 
         logging.info("Actually landing for real.")
+        logging.info(f"End Battery Level: {controller.drone.get_battery()}%")
         controller.drone.end()
         cv2.destroyAllWindows()
         cv2.waitKey(1)
