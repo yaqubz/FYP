@@ -255,22 +255,26 @@ class DroneController:
         self.invalid_ids = set(range(12, 15))
         self.exit_ids = set(range(50, 100)) # Added 3 Feb - for drone to avoid exiting search area
         self.exit_detected = False
+        self.exit_distance_3D = None
         self.marker_positions = {}
          
         # Navigation parameters
         self.move_speed = 20
         self.yaw_speed = 50
         self.forward_tof_dist = None # to be updated by subthread
+        self.forward_tof_lock = Lock()
 
         self.target_yaw = None
 
     def get_ext_tof(self) -> int:   # TBC 5 FEB should put under CustomTello instead of Controller?
         """Get ToF sensor reading"""
         response = self.drone.send_read_command("EXT tof?")
-        try:
-            return int(response.split()[1])
-        except ValueError or IndexError:    # IndexError if using threading and the response is not as intended
-            return 8888
+        with self.forward_tof_lock:
+            try:
+                return int(response.split()[1])
+            except ValueError or IndexError as e:    # IndexError if using threading and the response is not as intended
+                logging.debug(f"get_ext_tof raises error: {e}. Returning 8888.")
+                return 8888
             
     def process_depth_map(self, frame):
         """Process frame through MiDaS to get depth map"""
@@ -300,8 +304,16 @@ class DroneController:
         with self.marker_x_lock:
             self.marker_x = x
 
+    def get_tof_distance(self):
+        with self.forward_tof_lock:
+            return self.forward_tof_dist
+
     def detect_markers(self, frame, marker_size=14.0):
-        """Detect ArUco markers and estimate pose"""
+        """
+        Detect ArUco markers and estimate pose
+        Returns values of the FIRST DETECTED VALID MARKER
+        
+        """
         camera_matrix, dist_coeffs = get_calibration_parameters()
         aruco_dict = aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_250)
         parameters = aruco.DetectorParameters()
@@ -341,6 +353,9 @@ class DroneController:
 
                 # If it's an exit marker, compute its yaw
                 elif marker_id in self.exit_ids:
+                    x, y, z = tvecs[0][0]
+                    euclidean_distance = np.sqrt(x*x + y*y + z*z)
+                    self.exit_distance_3D = euclidean_distance
                     # Convert rotation vector to rotation matrix
                     R, _ = cv2.Rodrigues(rvecs[0])
                     # Calculate yaw (rotation around Z-axis)
@@ -387,7 +402,8 @@ def tof_update_thread(controller, Hz: float = 2):
     
     """
     while True:
-        controller.forward_tof_dist = controller.get_ext_tof()
+        with controller.forward_tof_lock:
+            controller.forward_tof_dist = controller.get_ext_tof()
         time.sleep(1/Hz)
         logging.debug(f"controller.forward_tof_dist: {controller.forward_tof_dist}")
 
@@ -453,9 +469,9 @@ def navigation_thread(controller):
             marker_found = False
             
             # Check for markers
-            marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame)
+            marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame)   # returns details of ONE valid marker
             if marker_found:
-                # Draw marker detection and pose information
+                # Draw marker detection and pose information on the ONE detected valid marker
                 marker_center = np.mean(corners[0], axis=0)
                 cv2.circle(display_frame, 
                           (int(marker_center[0]), int(marker_center[1])), 
@@ -536,37 +552,43 @@ def navigation_thread(controller):
                     logging.info("Marker Found, but not landing since not flying. Program continues.")
             
             elif controller.exit_detected:  ## TO TEST 4 Feb
-                    # This condition is placed after marker_detected but before depth mapping 
-                    logging.debug("Exit detected. Turning Around...") 
+                # This condition is placed after marker_detected but before depth mapping 
+                logging.info(f"Exit detected at distance {controller.exit_distance_3D}.") 
 
-                    ## MTD 1: Simple U-turn when detected
-                    if not NO_FLY:
-                        controller.drone.rotate_clockwise(180)
-                    controller.exit_detected = False 
+                ## MTD 1: Simple U-turn when detected
+                if not NO_FLY and controller.exit_distance_3D < 300:
+                    logging.info(f"Avoiding exit. Turning 180 degrees.")
+                    controller.drone.rotate_clockwise(180)
+
+                elif not NO_FLY:
+                    logging.info(f"Exit still far away. No action taken.")
+
+                controller.exit_detected = False    # resets, then always needs redetection
+                controller.exit_distance_3D = None
+                
+                ## MTD 2: TESTING "FORCE-FIELD METHOD"
+                # if controller.target_yaw is not None:
+                #     # Get current drone yaw (e.g., from IMU)
+                #     current_yaw = controller.drone.get_yaw() 
+                #     logging.debug(f"Current yaw: {current_yaw:.2f}°")
+
+                #     # Calculate shortest turn angle
+                #     delta_yaw = controller.target_yaw - current_yaw
+                #     delta_yaw = (delta_yaw + 180) % 360 - 180  # Normalize to [-180, 180]
                     
-                    ## MTD 2: TESTING "FORCE-FIELD METHOD"
-                    # if controller.target_yaw is not None:
-                    #     # Get current drone yaw (e.g., from IMU)
-                    #     current_yaw = controller.drone.get_yaw() 
-                    #     logging.debug(f"Current yaw: {current_yaw:.2f}°")
-
-                    #     # Calculate shortest turn angle
-                    #     delta_yaw = controller.target_yaw - current_yaw
-                    #     delta_yaw = (delta_yaw + 180) % 360 - 180  # Normalize to [-180, 180]
-                        
-                    #     # Turn the drone (TBC direction)
-                    #     if not NO_FLY:
-                    #         if delta_yaw > 0:
-                    #             controller.drone.rotate_clockwise(int(delta_yaw))
-                    #         else:
-                    #             controller.drone.rotate_counter_clockwise(-int(delta_yaw))
-                    #     logging.info(f"Turning {delta_yaw:.2f}° to align with exit marker")
-                        
-                    #     # Reset exit state
-                    #     controller.exit_detected = False
-                    #     controller.target_yaw = None
-                    # else:
-                    #     logging.warning("Exit detected but no target yaw!")
+                #     # Turn the drone (TBC direction)
+                #     if not NO_FLY:
+                #         if delta_yaw > 0:
+                #             controller.drone.rotate_clockwise(int(delta_yaw))
+                #         else:
+                #             controller.drone.rotate_counter_clockwise(-int(delta_yaw))
+                #     logging.info(f"Turning {delta_yaw:.2f}° to align with exit marker")
+                    
+                #     # Reset exit state
+                #     controller.exit_detected = False
+                #     controller.target_yaw = None
+                # else:
+                #     logging.warning("Exit detected but no target yaw!")
 
             # Split depth map into regions for navigation
             h, w = depth_colormap.shape[:2]
