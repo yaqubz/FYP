@@ -10,6 +10,7 @@ Change Log:
 """
 
 from PPFLY2.main import execute_waypoints
+from markerserver.markerserver import MarkerClient
 
 
 import torch
@@ -128,6 +129,7 @@ class CustomTello(Tello):
     
     def go_to_height(self, height: int) -> None:
         """
+        Custom Tello function to go to exact height, works caa 6 Feb (Gab)
         :param: height: Desired height in cm
         :return: None
         """
@@ -187,6 +189,7 @@ class CustomTello(Tello):
             # Check if we're within tolerance
             if abs(error) < tolerance:
                 logging.info(f"Target height achieved. Current: {current_height}cm, Target: {target_height}cm")
+                self.send_rc_control(0,0,0,0)
                 return True
                 
             # Calculate PID terms
@@ -199,15 +202,16 @@ class CustomTello(Tello):
             # Convert output to speed command
             speed = int(abs(output))
             speed = max(min_speed, min(speed, max_speed))  # Clamp speed between min and max
-            
+            logging.debug(f"Output: {output}, Speed: {speed}")
+
             # Apply control
             try:
                 if output > 0:
                     if speed >= min_speed:
-                        self.move_up(speed)
+                        self.send_rc_control(0,0,speed,0)
                 else:
                     if speed >= min_speed:
-                        self.move_down(speed)
+                        self.send_rc_control(0,0,-speed,0)
             except Exception as e:
                 logging.error(f"Error during height adjustment: {e}")
                 return False
@@ -265,6 +269,9 @@ class DroneController:
         self.forward_tof_lock = Lock()
 
         self.target_yaw = None
+
+        # Marker Server/Client (6 Feb new)
+        self.marker_client = MarkerClient()
 
     def get_ext_tof(self) -> int:   # TBC 5 FEB should put under CustomTello instead of Controller?
         """Get ToF sensor reading"""
@@ -472,6 +479,7 @@ def navigation_thread(controller):
             marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame)   # returns details of ONE valid marker
             if marker_found:
                 # Draw marker detection and pose information on the ONE detected valid marker
+                logging.debug(f"ID {marker_id} found. Drawing axes.")
                 marker_center = np.mean(corners[0], axis=0)
                 cv2.circle(display_frame, 
                           (int(marker_center[0]), int(marker_center[1])), 
@@ -486,8 +494,9 @@ def navigation_thread(controller):
                 
                 # Draw pose estimation
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
+                # controller.marker_client.send_update(marker_id, detected=True)
                 
-                logging.info(f"Valid marker {marker_id} detected! Switching to approach sequence...")
+                # logging.info(f"Valid marker {marker_id} locked on! Switching to approach sequence...")
                 
                 # Center on the marker
                 frame_center = frame.shape[1] / 2
@@ -519,9 +528,7 @@ def navigation_thread(controller):
                         current_height = controller.drone.get_distance_tof() - EXTRA_HEIGHT
                         current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
-                        logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n 
-                                     Drone height: {current_height:.1f}cm \n 
-                                     2D distance to marker: {current_distance_2D:.1f}cm")
+                        logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
 
                         if current_distance_2D >= 300:
                             step_dist = current_distance_2D - 150   # last step will be at least (300-150)=150
@@ -545,6 +552,7 @@ def navigation_thread(controller):
                         logging.info("Approach complete!")
                         controller.drone.send_rc_control(0, 0, 0, 0)
                         approach_complete = True
+                        # controller.marker_client.send_update(marker_id, landed=True)
                         time.sleep(1)
                         break
 
