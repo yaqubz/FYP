@@ -318,8 +318,9 @@ class DroneController:
     def detect_markers(self, frame, marker_size=14.0):
         """
         Detect ArUco markers and estimate pose
-        Returns values of the FIRST DETECTED VALID MARKER
-        
+        Returns values of the FIRST DETECTED VALID MARKER 
+        :return:
+            marker_id:int         
         """
         camera_matrix, dist_coeffs = get_calibration_parameters()
         aruco_dict = aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_250)
@@ -356,7 +357,7 @@ class DroneController:
                     self.set_distance(euclidean_distance)
                     logging.info(f"Marker Centre: {marker_center}")
 
-                    return True, corners[i], marker_id, rvecs[0], tvecs[0]  # Return only the FIRST valid marker
+                    return True, corners[i], int(marker_id), rvecs[0], tvecs[0]  # Return only the FIRST valid marker
 
                 # If it's an exit marker, compute its yaw
                 elif marker_id in self.exit_ids:
@@ -430,20 +431,15 @@ def navigation_thread(controller):
     # Initial movement
     logging.info("Moving to initial altitude...")
     if not NO_FLY:
-        # current_height = controller.drone.get_height()
-        # desired_height = 80
-        # if current_height < desired_height:
-        #     controller.drone.move_up(desired_height - current_height)    # TODO 30 Jan: How to go to specific height?
-        #     new_height = controller.drone.get_height()
-        # new_height = controller.drone.get_height()
-        # print(f"Drone moved from {current_height:.0f}cm to {new_height:.0f}cm height.")    
-        controller.drone.move_up(20 + EXTRA_HEIGHT)
-    time.sleep(2)
+        controller.drone.go_to_height_PID(120)
+        time.sleep(1)
     
     # Approach sequence state
     approach_complete = False
     centering_complete = False
     approach_start_time = None
+    centering_threshold = 30    # in px? TBC
+    logging.debug(f"Centering Threshold: {centering_threshold}")
     
     while True:  # Main loop continues until marker found or battery low
         try:
@@ -494,16 +490,13 @@ def navigation_thread(controller):
                 
                 # Draw pose estimation
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
-                # controller.marker_client.send_update(marker_id, detected=True)
+                controller.marker_client.send_update(marker_id, detected=True)
                 
-                # logging.info(f"Valid marker {marker_id} locked on! Switching to approach sequence...")
+                logging.info(f"Valid marker {marker_id} locked on! Switching to approach sequence...")
                 
                 # Center on the marker
                 frame_center = frame.shape[1] / 2
                 x_error = marker_center[0] - frame_center
-                
-                # Centering threshold
-                centering_threshold = 30
                 
                 if not NO_FLY:
                     if not centering_complete:
@@ -531,30 +524,31 @@ def navigation_thread(controller):
                         logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
 
                         if current_distance_2D >= 300:
-                            step_dist = current_distance_2D - 150   # last step will be at least (300-150)=150
-                            logging.info(f"Distance too large. Stepping forward {int(current_distance_2D)}cm to approach marker...")
+                            step_dist:int = 150
+                            logging.info(f"Distance too large. Stepping forward {step_dist}cm to approach marker...")
                             controller.drone.send_rc_control(0, 0, 0, 0)
-                            controller.drone.move_forward(int(step_dist))
+                            controller.drone.move_forward(step_dist)
 
                             time.sleep(1)  # Wait for movement to complete
                             new_distance = controller.get_distance()
                             if new_distance is not None:
                                 logging.info(f"New 3D distance to marker: {new_distance:.1f}cm. Recentering...")
+                                centering_complete = False
+                                centering_threshold -= 3    # reduce threshold for better accuracy (TBC 6 Feb)
                             else:
                                 logging.info("Lost marker during approach step...")
+                                centering_threshold = 30
+                                centering_complete = False
 
                         elif current_distance_2D > 0 and current_distance_2D < 300: # FINAL APPROACH 5 Feb
                             logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
-                            controller.drone.send_rc_control(0, 0, 0, 0) 
                             controller.drone.move_forward(int(current_distance_2D))
-
-
-                        logging.info("Approach complete!")
-                        controller.drone.send_rc_control(0, 0, 0, 0)
-                        approach_complete = True
-                        # controller.marker_client.send_update(marker_id, landed=True)
-                        time.sleep(1)
-                        break
+                            logging.info("Approach complete!")
+                            controller.drone.send_rc_control(0, 0, 0, 0)
+                            approach_complete = True
+                            controller.marker_client.send_update(marker_id, landed=True)
+                            time.sleep(1)
+                            break
 
                 else: # if simulating
                     logging.info("Marker Found, but not landing since not flying. Program continues.")
@@ -686,11 +680,8 @@ def main():
         logging.info("Taking off...")
         if not NO_FLY:    
             controller.drone.takeoff()
-
-            if not controller.drone.go_to_height_PID(120):  # Testing 5 Feb for going to height
-                controller.drone.go_to_height(100)          # Testing 5 Feb for going to height
-
-            controller.drone.send_rc_control(0, 0, 0, 0)    # Added 30 Jan for stabilization (TBC)
+            controller.drone.go_to_height_PID(100)
+            controller.drone.send_rc_control(0, 0, 0, 0)
             execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
