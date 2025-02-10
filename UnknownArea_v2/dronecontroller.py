@@ -40,6 +40,7 @@ class DroneController:
         self.marker_x_lock = Lock()
         self.is_running = True
         self.marker_detected = False
+        self.markernum_lockedon:int = None
         self.is_centered = False
         self.movement_completed = False
         self.valid_ids = set(range(1, 12))  # Temporary 29 Jan
