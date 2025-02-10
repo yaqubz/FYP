@@ -61,8 +61,10 @@ Follow these steps to set up the UWB console on a Windows PC:
 
 - **Error: COM Port not found**: Ensure that the UWB device is properly connected and that the correct COM port is selected in the `.exe` prompt.
 - **Connection issues**: Verify that both the Mac and Windows PCs are connected to the same network and that the `.exe` is running on the Windows PC.
-
----
+- **'cv2.aruco' has no attribute 'detectMarkers'**: The default `opencv-python` module that is installed with `djitellopy` does not include ArUco. Instead, run:
+```powershell
+pip uninstall opencv-python opencv-contrib-python
+pip install opencv-contrib-python
 
 ## License
 

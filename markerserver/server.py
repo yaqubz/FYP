@@ -1,5 +1,10 @@
 # 7 Feb Works - run as 'python -m markerserver.server'
 # Need to forcefully close terminal
+# must run server BEFORE running clients
+
+"""
+python -m markerserver.server
+"""
 
 import logging
 
