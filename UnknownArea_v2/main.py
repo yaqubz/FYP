@@ -13,11 +13,12 @@ Change Log:
     -
     -
     - (IMPT) Run in terminal from main workspace as "python -m UnknownArea_v2.main"
+        python -m UnknownArea_v2.main
 """
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
 # Logging handlers and format (IMPT: Must be before importing other modules!?)
-file_handler = logging.FileHandler("log.log", mode='w')  # Log to a file (overwrite each run)
+file_handler = logging.FileHandler("log_UnknownSearchArea_main.log", mode='w')  # Log to a file (overwrite each run)
 console_handler = logging.StreamHandler()  # Log to the terminal
 formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
 file_handler.setFormatter(formatter)
@@ -39,7 +40,9 @@ from threading import Lock
 import time
 import os
 
-NO_FLY = True     # indicate NO_FLY = True so that the drone doesn't fly but the video feed still appears
+LAPTOP_ONLY = True # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
+NO_FLY = True     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+
 EXTRA_HEIGHT = 0   # cm; for demo purpose if obstacle is higher than the ground 
 
 # Define network configuration constants
@@ -149,72 +152,87 @@ def navigation_thread(controller):
             if marker_found:
                 # Draw marker detection and pose information on the ONE detected valid marker
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
-                controller.marker_client.send_update(marker_id, detected=True)
-                logging.info(controller.marker_client.marker_status)
-                logging.info(controller.marker_client.is_marker_available(2))
-                logging.info(controller.marker_client.is_marker_available(3))
-                
-                logging.info(f"Valid marker {marker_id} locked on! Switching to approach sequence...")
-                
-                # Center on the marker
-                frame_center = frame.shape[1] / 2
-                marker_center = np.mean(corners[0], axis=0)
-                x_error = marker_center[0] - frame_center
-                
-                if not NO_FLY:
-                    if not centering_complete:
-                        if abs(x_error) > centering_threshold:
-                            # Calculate yaw speed based on error
-                            yaw_speed = int(np.clip(x_error / 10, -20, 20))
-                            controller.drone.send_rc_control(0, 0, 0, yaw_speed)
-                            logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
-                        else:
-                            logging.info("Marker centered! Starting approach...")
-                            controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
-                            time.sleep(1)  # Stabilize
-                            centering_complete = True
+                logging.debug(f"Obtained Marker Status from Server: {controller.marker_client.marker_status}")
+
+                if controller.marker_client.is_marker_available(marker_id) or controller.markernum_lockedon == marker_id:
+                    # checks if already locked on, or is not yet detected and can be locked on
+                    controller.marker_client.send_update(marker_id, detected=True)      # will only send VALID markers
+                    controller.markernum_lockedon = marker_id
+                    logging.info(f"Valid marker {marker_id} locked on! Switching to approach sequence...")
+                elif not controller.marker_client.is_marker_available(marker_id):
+                    pass
+                else: # marker detected is NOT available and NOT previously locked on
+                    controller.markernum_lockedon = None
                     
-                    elif not approach_complete:
-                        current_distance_3D = controller.get_distance()
-                        if current_distance_3D is None:
-                            logging.info("Lost marker during approach...")
-                            time.sleep(0.1)
-                            continue
+                controller.markernum_lockedon = True    # TESTING 7 FEB
+                
+                if controller.markernum_lockedon:   # i.e. is not None
 
-                        current_height = controller.drone.get_distance_tof() - EXTRA_HEIGHT
-                        current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
-
-                        logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
-
-                        if current_distance_2D >= 300:
-                            step_dist:int = 150
-                            logging.info(f"Distance too large. Stepping forward {step_dist}cm to approach marker...")
-                            controller.drone.send_rc_control(0, 0, 0, 0)
-                            controller.drone.move_forward(step_dist)
-
-                            time.sleep(1)  # Wait for movement to complete
-                            new_distance = controller.get_distance()
-                            if new_distance is not None:
-                                logging.info(f"New 3D distance to marker: {new_distance:.1f}cm. Recentering...")
-                                centering_complete = False
-                                centering_threshold -= 3    # reduce threshold for better accuracy (TBC 6 Feb)
+                    logging.debug(controller.marker_client.is_marker_available(1))
+                    logging.debug(controller.marker_client.is_marker_available(2))
+                    logging.info(controller.marker_client.is_marker_available(3))
+                    
+                    logging.info(f"Valid marker {marker_id} locked on! Switching to approach sequence...")
+                    
+                    # Center on the marker
+                    frame_center = frame.shape[1] / 2
+                    marker_center = np.mean(corners[0], axis=0)
+                    x_error = marker_center[0] - frame_center
+                    
+                    if not NO_FLY:
+                        if not centering_complete:
+                            if abs(x_error) > centering_threshold:
+                                # Calculate yaw speed based on error
+                                yaw_speed = int(np.clip(x_error / 10, -20, 20))
+                                controller.drone.send_rc_control(0, 0, 0, yaw_speed)
+                                logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
                             else:
-                                logging.info("Lost marker during approach step...")
-                                centering_threshold = 30
-                                centering_complete = False
+                                logging.info("Marker centered! Starting approach...")
+                                controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
+                                time.sleep(1)  # Stabilize
+                                centering_complete = True
+                        
+                        elif not approach_complete:
+                            current_distance_3D = controller.get_distance()
+                            if current_distance_3D is None:
+                                logging.info("Lost marker during approach...")
+                                time.sleep(0.1)
+                                continue
 
-                        elif current_distance_2D > 0 and current_distance_2D < 300:
-                            logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
-                            controller.drone.move_forward(int(current_distance_2D))
-                            logging.info("Approach complete!")
-                            controller.drone.send_rc_control(0, 0, 0, 0)
-                            approach_complete = True
-                            controller.marker_client.send_update(marker_id, landed=True)
-                            time.sleep(1)
-                            break
+                            current_height = controller.drone.get_distance_tof() - EXTRA_HEIGHT
+                            current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
-                else: # if simulating
-                    logging.info("Marker Found, but not landing since not flying. Program continues.")
+                            logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
+
+                            if current_distance_2D >= 300:
+                                step_dist:int = 150
+                                logging.info(f"Distance too large. Stepping forward {step_dist}cm to approach marker...")
+                                controller.drone.send_rc_control(0, 0, 0, 0)
+                                controller.drone.move_forward(step_dist)
+
+                                time.sleep(1)  # Wait for movement to complete
+                                new_distance = controller.get_distance()
+                                if new_distance is not None:
+                                    logging.info(f"New 3D distance to marker: {new_distance:.1f}cm. Recentering...")
+                                    centering_complete = False
+                                    centering_threshold -= 3    # reduce threshold for better accuracy (TBC 6 Feb)
+                                else:
+                                    logging.info("Lost marker during approach step...")
+                                    centering_threshold = 30
+                                    centering_complete = False
+
+                            elif current_distance_2D > 0 and current_distance_2D < 300:
+                                logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
+                                controller.drone.move_forward(int(current_distance_2D))
+                                logging.info("Approach complete!")
+                                controller.drone.send_rc_control(0, 0, 0, 0)
+                                approach_complete = True
+                                controller.marker_client.send_update(marker_id, landed=True)
+                                time.sleep(1)
+                                break
+
+                    else: # if simulating
+                        logging.info("Marker Found, but not landing since not flying. Program continues.")
             
             elif controller.exit_detected: # This condition is placed after marker_detected but before depth mapping 
                 logging.info(f"Exit detected at distance {controller.exit_distance_3D:.0f}cm.") 
@@ -310,14 +328,15 @@ def navigation_thread(controller):
 def main():
     global CAMERA_MATRIX, DIST_COEFF
 
-    controller = DroneController(NETWORK_CONFIG, simulate=True)
+    controller = DroneController(NETWORK_CONFIG, simulate=LAPTOP_ONLY)
     try:
         logging.info("Taking off...")
         if not NO_FLY:    
             controller.drone.takeoff()
             controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
-            execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
+            # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
+            # execute_waypoints("waypoint20x20.json", controller.drone, NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
             execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)

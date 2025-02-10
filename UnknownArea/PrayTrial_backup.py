@@ -7,7 +7,7 @@ import threading
 from threading import Lock
 import time
 
-SIMULATE = True     # indicate SIMULATE = True so that the drone doesn't fly but the video feed still appears
+SIMULATE = False     # indicate SIMULATE = True so that the drone doesn't fly but the video feed still appears
 # But after seeing a marker, it will still attempt to land, and will exit the code.
 
 def get_calibration_parameters():
@@ -255,7 +255,7 @@ def navigation_thread(controller):
                     print(f"Current distance to marker: {current_distance:.1f}cm")
                     
                     # Define safe approach distance (60cm from marker)
-                    safe_distance = max(int(current_distance - 50), 0)  # Keep 60cm safety margin
+                    safe_distance = max(int(current_distance - 60), 0)  # Keep 60cm safety margin
                     
                     if safe_distance > 0:
                         print(f"Moving forward {safe_distance}cm to approach marker...")
@@ -331,7 +331,7 @@ def navigation_thread(controller):
                 else:
                     if blue_center > red_center and dist <= 600:
                         if not SIMULATE:
-                            controller.drone.rotate_clockwise(135)
+                            controller.drone.rotate_counter_clockwise(135)
                         time.sleep(1)  # Stabilize
                         cv2.putText(display_frame, "Avoiding Obstacle", (10, 60), 
                                   cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
@@ -381,6 +381,7 @@ def main():
         print("Taking off...")
         if not SIMULATE:    
             controller.drone.takeoff()
+            controller.drone.send_rc_control(0,0,0,0)
         else:
             print("Simulating takeoff. Drone will NOT fly.")
         time.sleep(2)
