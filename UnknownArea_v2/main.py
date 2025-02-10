@@ -152,19 +152,22 @@ def navigation_thread(controller):
             if marker_found:
                 # Draw marker detection and pose information on the ONE detected valid marker
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
-                logging.debug(f"Obtained Marker Status from Server: {controller.marker_client.marker_status}")
+                # logging.debug(f"Obtained Marker Status from Server: {controller.marker_client.marker_status}")
 
                 if controller.marker_client.is_marker_available(marker_id) or controller.markernum_lockedon == marker_id:
                     # checks if already locked on, or is not yet detected and can be locked on
                     controller.marker_client.send_update(marker_id, detected=True)      # will only send VALID markers
+                    logging.debug(f"0")
                     controller.markernum_lockedon = marker_id
                     logging.info(f"Valid marker {marker_id} locked on! Switching to approach sequence...")
                 elif not controller.marker_client.is_marker_available(marker_id):
                     pass
+                    logging.debug(f"1")
                 else: # marker detected is NOT available and NOT previously locked on
                     controller.markernum_lockedon = None
+                    logging.debug(f"2")
                     
-                controller.markernum_lockedon = True    # TESTING 7 FEB
+                controller.markernum_lockedon = marker_id    # TESTING 7 FEB - logic doesnt make sense yet
                 
                 if controller.markernum_lockedon:   # i.e. is not None
 
@@ -273,6 +276,10 @@ def navigation_thread(controller):
                 #     logging.warning("Exit detected but no target yaw!")
 
             else: # Navigation logic using depth map if neither victim nor exit detected.
+                # Publish that its lost track of target. Then refresh its locked_on number
+                controller.marker_client.send_update(controller.markernum_lockedon, detected=False)
+                controller.markernum_lockedon = None
+            
             # (NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)
 
                 if controller.depth_map_colors["red"]["center"] > controller.depth_map_colors["blue"]["center"]:

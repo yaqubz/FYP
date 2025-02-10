@@ -9,7 +9,7 @@ python -m markerserver.server
 import logging
 
 # Logging handlers and format (cannot put in main?)
-file_handler = logging.FileHandler("serverlog.log", mode='w')  # Log to a file (overwrite each run)
+file_handler = logging.FileHandler("log_markerserver.log", mode='w')  # Log to a file (overwrite each run)
 console_handler = logging.StreamHandler()  # Log to the terminal
 formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
 file_handler.setFormatter(formatter)
