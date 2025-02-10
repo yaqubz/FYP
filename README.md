@@ -65,6 +65,7 @@ Follow these steps to set up the UWB console on a Windows PC:
 ```powershell
 pip uninstall opencv-python opencv-contrib-python
 pip install opencv-contrib-python
+```
 
 ## License
 
