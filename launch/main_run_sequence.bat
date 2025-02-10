@@ -1,11 +1,11 @@
 @REM Start UWBViz/main.py to mark positions of Victims, Danger Zones and Pillars
-python3 UWBViz/main.py
+python UWBViz/main.py
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] UWBViz/main.py encountered an error. Continuing with the next steps...
 )
 
 @REM Run PPGUI/main.py to mark waypoints
-python3 PPGUI/main.py
+python PPGUI/main.py
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] PPGUI/main.py encountered an error. Continuing with the next steps...
 )
@@ -28,7 +28,7 @@ if %ERRORLEVEL% EQU 1 (
 
 
 @REM Start UWBViz/main.py in a new process (i.e. open a new terminal)
-start python3 UWBViz/main.py
+start python UWBViz/main.py
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] UWBViz/main.py encountered an error. Continuing with the next steps...
 )

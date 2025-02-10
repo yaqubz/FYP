@@ -24,6 +24,7 @@ This code requires:
 Note on UDP:
     Using NTUSecure or RMTT/Tello WiFi is okay for transferring data within the same PC via UDP. However, it will not allow UDP transfer across devices.
 
+Run UWB_SendUDP.py to simulate some drones' locations being broadcast via UDP
 """
 
 # Add workspace root to sys.path (9 Jan: Works but might need a better solution)
