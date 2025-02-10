@@ -36,8 +36,6 @@ class DroneController:
         self.frame_lock = Lock()
         self.distance = None        # 29 Jan Gab: This is the 3D distance - decently accurate
         self.distance_lock = Lock()
-        self.marker_x = None    # NOT BEING USED? 29 Jan Gab
-        self.marker_x_lock = Lock()
         self.is_running = True
         self.marker_detected = False
         self.markernum_lockedon:int = None
@@ -117,14 +115,6 @@ class DroneController:
     def set_distance(self, distance):
         with self.distance_lock:
             self.distance = distance
-            
-    def get_marker_x(self):
-        with self.marker_x_lock:
-            return self.marker_x
-            
-    def set_marker_x(self, x):
-        with self.marker_x_lock:
-            self.marker_x = x
 
     def get_tof_distance(self):
         with self.forward_tof_lock:
@@ -168,7 +158,6 @@ class DroneController:
                     marker_center = np.mean(corners[i][0], axis=0)
                     
                     # Store basic marker info
-                    self.set_marker_x(marker_center[0])
                     self.set_distance(euclidean_distance)
                     logging.debug(f"Marker Centre: {marker_center}")
 
@@ -187,6 +176,5 @@ class DroneController:
                     logging.info(f"Exit marker yaw: {self.target_yaw:.2f}°")
 
         self.set_distance(None)
-        self.set_marker_x(None)
         return False, None, None, None, None
 
