@@ -1,7 +1,7 @@
 # 6 Feb Testing - need to run this in the background as main()? or just put server.run() in the script such that always run when imported?
 # Run in the background to reset
 
-import threading, socket, json
+import threading, socket, json, time
 import logging  # To take on the logging config of the parent script!
 
 class MarkerServer:
@@ -30,24 +30,26 @@ class MarkerServer:
         while True:
             data, addr = self.sock.recvfrom(1024)
             message = json.loads(data.decode())
-            self.update_marker_status(message)
+            logging.debug(f"MESSAGE: {message}")
+            if message:
+                self.update_marker_status(message)
             self.broadcast_status()
 
     def update_marker_status(self, message):
+        """
+        Updates internal class attribute.
+        """
         with self.lock:
             marker_id = message["marker_id"]
             logging.debug(f"marker_id: {marker_id}")
-            if not marker_id == -1: 
+            if not marker_id == -1 and not marker_id == None: 
                 if marker_id not in self.marker_status:
                     # Nested dictionary with key-values pairs (Level 1: Marker ID; Level 2: Statuses)
                     self.marker_status[marker_id] = {"detected": False, "landed": False}
-                    logging.debug(f"{marker_id} not detected, not landed")
                 if "detected" in message:
                     self.marker_status[marker_id]["detected"] = message["detected"]
-                    logging.debug(f"{marker_id} detected")
                 if "landed" in message:
                     self.marker_status[marker_id]["landed"] = message["landed"]
-                    logging.debug(f"{marker_id} landed")
                 logging.info(f"Marker Statuses: {self.marker_status}")
 
     def broadcast_status_to_one(self, addr): #<--- Add this function
@@ -89,28 +91,40 @@ class MarkerClient:
         print(f"Marker client connected to server  {self.server_host}:{self.server_port}")
 
     def send_update(self, marker_id:int, detected=None, landed=None):
-        message = {"marker_id": marker_id}
-        if detected is not None:
-            message["detected"] = detected
-        if landed is not None:
-            message["landed"] = landed
-        self.sock.sendto(json.dumps(message).encode(), (self.server_host, self.server_port))
-        logging.debug(f"MarkerClient sent {message}")
+        if not marker_id is None: 
+            message = {"marker_id": marker_id}
+            if detected is not None:
+                message["detected"] = detected
+            if landed is not None:
+                message["landed"] = landed
+            message_json = json.dumps(message).encode()
+
+            for _ in range(3):  # Send the message 3 times
+                self.sock.sendto(message_json, (self.server_host, self.server_port))
+                time.sleep(0.05)  # Small delay to prevent flooding
+
+            logging.debug(f"MarkerClient sent {message}")
 
     def receive_updates(self):  # background thread, does not print directly! DO NOT call this directly.
         while True:
             try:
                 data, _ = self.sock.recvfrom(1024)
                 self.marker_status = json.loads(data.decode())
-                logging.debug(f"Updated marker status: {self.marker_status}")
-                print(f"Received marker status: {self.marker_status}") #<--- Print the status!
+                logging.debug(f"Received marker status from server: {self.marker_status}")
             except socket.timeout:  # Handle timeouts (if you set a timeout on the socket)
                 pass
             except Exception as e: # Catch any other exceptions
                 logging.error(f"Error receiving updates: {e}")
 
     def is_marker_available(self, marker_id):
-        # Ensure the marker is both not detected and not landed
-        return (self.marker_status.get(marker_id, {}).get("detected", False) and
-                    self.marker_status.get(marker_id, {}).get("landed", False))
+        marker_id = str(marker_id)  # Ensure it's a string to match dictionary keys
+        marker_data = self.marker_status.get(marker_id)  # Get the marker's data
+
+        if marker_data is None:
+            return True  # Marker has never been seen before -> Available
+
+        detected = marker_data.get("detected", False)
+        landed = marker_data.get("landed", False)
+
+        return not (detected or landed)  # If either is True, it's NOT available
     
