@@ -76,7 +76,8 @@ class DroneController:
     def process_depth_color_map(self, depth_colormap):
         """
         :param: depth_colormap: the actual frame of the depth color map
-        Split depth map into regions for navigation
+        :return: None
+        Split depth map into regions for navigation. Updates class attributes.
         """
         h, w = depth_colormap.shape[:2]
         left_region = depth_colormap[:, :w//3]
@@ -169,7 +170,7 @@ class DroneController:
                     # Store basic marker info
                     self.set_marker_x(marker_center[0])
                     self.set_distance(euclidean_distance)
-                    logging.info(f"Marker Centre: {marker_center}")
+                    logging.debug(f"Marker Centre: {marker_center}")
 
                     return True, corners[i], int(marker_id), rvecs[0], tvecs[0]  # Return only the FIRST valid marker
 

@@ -1,6 +1,7 @@
 # WORKS 23 JAN: Reads waypoint JSON file and executes it, then changes over to navigation_thread to use depth-mapping and lands on valid marker.
 # IMPT: Must be connected to drone to work!
 # Testing 6 Feb modularised
+# Testing 11 Feb markerserverclient
 
 """
 Change Log:
@@ -126,7 +127,6 @@ def navigation_thread(controller):
     # Approach sequence state
     approach_complete = False
     centering_complete = False
-    approach_start_time = None
     centering_threshold = 30    # in px
     logging.debug(f"Centering Threshold: {centering_threshold}")
     
@@ -136,7 +136,7 @@ def navigation_thread(controller):
             display_frame = frame.copy()    # Create a copy of frame for visualization
             
             # Get depth color map
-            depth_colormap = controller.generate_color_depth_map(frame) # TBC 6 Feb can shift under "else" since no need to generate when markers found
+            depth_colormap = controller.generate_color_depth_map(frame) # TBC 6 Feb can shift under "else" since no need to generate when markers found (10 Feb Ans: Not if you want to visualize)
             controller.process_depth_color_map(depth_colormap)
             
             # Get ToF distance
@@ -152,22 +152,20 @@ def navigation_thread(controller):
             if marker_found:
                 # Draw marker detection and pose information on the ONE detected valid marker
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
-                logging.debug(f"Obtained Marker Status from Server: {controller.marker_client.marker_status}")
-                logging.debug(f"Marker ID detected: {marker_id}")
-                logging.debug(f"Is marker {marker_id} available: {controller.marker_client.is_marker_available(marker_id)}")
+                logging.info(f"Obtained Marker Status from Server: {controller.marker_client.marker_status}")
+                logging.debug(f"Marker detected: {marker_id}. Available: {controller.marker_client.is_marker_available(marker_id)}")
 
 
                 if controller.marker_client.is_marker_available(marker_id):
                     # checks if already locked on, or is not yet detected and can be locked on
                     controller.marker_client.send_update(marker_id, detected=True)      # will only send VALID markers
-                    logging.debug(f"0")
                     controller.markernum_lockedon = marker_id
-                    logging.info(f"Valid marker {marker_id} available and locked onto {controller.markernum_lockedon}!")
+                    logging.info(f"Valid marker {marker_id} available and locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
                 else: # marker detected is NOT available
                     logging.info(f"Valid marker {marker_id} is NOT available.")
                 
                 if controller.markernum_lockedon:   # i.e. is not None                    
-                    logging.info(f"Switching to approach sequence for marker {controller.markernum_lockedon}...")
+                    logging.info(f"Still locked on and approaching marker {controller.markernum_lockedon}...")
                     
                     # Center on the marker
                     frame_center = frame.shape[1] / 2
@@ -267,8 +265,9 @@ def navigation_thread(controller):
 
             else: # Navigation logic using depth map if neither victim nor exit detected.
                   # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)
-                logging.debug(f"Nothing detected. Resetting markernum_lockedon from {controller.markernum_lockedon} to None")
+                
                 # Publish that its lost track of target. Then resets its locked_on number.
+                logging.debug(f"Nothing detected. Resetting markernum_lockedon from {controller.markernum_lockedon} to None")
                 controller.marker_client.send_update(controller.markernum_lockedon, detected=False)
                 controller.markernum_lockedon = None
 
@@ -318,7 +317,7 @@ def navigation_thread(controller):
                 break
                 
         except Exception as e:
-            logging.warning(f"Error in navigation: {e}. Continuing navigation.")
+            logging.error(f"Error in navigation: {e}. Continuing navigation.")
             # Don't cleanup or break - continue searching
             continue
 
@@ -336,7 +335,7 @@ def main():
             # execute_waypoints("waypoint20x20.json", controller.drone, NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
-            execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
+            # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
         time.sleep(2)
         
         # tof_thread = threading.Thread(target=tof_update_thread, args=(controller,2))
