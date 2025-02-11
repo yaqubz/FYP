@@ -3,12 +3,12 @@ from tkinter import ttk
 from markerserverclient import MarkerClient
 
 class MarkerStatusGUI:
-    def __init__(self, server_host='127.0.0.1', server_port=5005):
+    def __init__(self, server_host='255.255.255.255', server_port=5005):
         self.server_host = server_host
         self.server_port = server_port
 
         # Initialize the MarkerClient to receive updates
-        self.client = MarkerClient(server_host=self.server_host, server_port=self.server_port)
+        self.client = MarkerClient(broadcast_ip=self.server_host, server_port=self.server_port)
 
         # Initialize GUI
         self.root = tk.Tk()
@@ -23,15 +23,10 @@ class MarkerStatusGUI:
         self.tree.pack(fill=tk.BOTH, expand=True)
 
         # Start updating the GUI periodically
-        self.update_gui_periodically()
+        self.root.after(500, self.update_gui)  # Schedule first update
 
         # Start the GUI main loop
         self.root.mainloop()
-
-    def update_gui_periodically(self):
-        """Update the GUI with the latest marker statuses every 0.5 seconds."""
-        self.update_gui()
-        self.root.after(500, self.update_gui_periodically)  # Schedule the next update
 
     def update_gui(self):
         """Update the GUI with the latest marker statuses."""
@@ -45,10 +40,13 @@ class MarkerStatusGUI:
             landed = status.get("landed", False)
 
             # Use Unicode green check (✔) and red cross (❌) for clarity
-            detected_str = f"✔ True" if detected else f"❌ False"
-            landed_str = f"✔ True" if landed else f"❌ False"
+            detected_str = "✔ True" if detected else "❌ False"
+            landed_str = "✔ True" if landed else "❌ False"
 
             self.tree.insert("", "end", values=(marker_id, detected_str, landed_str))
 
+        # Schedule the next update (refresh every 500ms)
+        self.root.after(500, self.update_gui)
+
 if __name__ == "__main__":
-    MarkerStatusGUI(server_host="127.0.0.1", server_port=5005)
+    MarkerStatusGUI(server_host="255.255.255.255", server_port=5005)

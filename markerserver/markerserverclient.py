@@ -11,8 +11,10 @@ class MarkerServer:
         self.marker_status = {}  # {marker_id: {"detected": bool, "landed": bool}}
         self.lock = threading.Lock()
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Allow broadcast reception
         self.sock.bind((self.host, self.port))
         logging.info(f"Marker server started on {self.host}:{self.port}")
+
 
     def accept_connections(self):
         while True:
@@ -87,30 +89,29 @@ class MarkerServer:
     def run(self):
         self.clients = set()
         threading.Thread(target=self.handle_messages, daemon=True).start()
-
-        # Add a separate thread to handle client connections
         threading.Thread(target=self.accept_connections, daemon=True).start()
 
-        # Keep the main thread alive (you might not need this if you have other tasks)
+        # Keep the main thread alive (cannot delete)
         while True:
             time.sleep(1)
 
 
 class MarkerClient:
-    def __init__(self, server_host='127.0.0.1', server_port=5005):
-        self.server_host = server_host
+    def __init__(self, server_port=5005, broadcast_ip="255.255.255.255"):
         self.server_port = server_port
+        self.broadcast_ip = broadcast_ip
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.bind(('0.0.0.0', 0))  # Bind to any available port
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Enable broadcast
+        self.sock.bind(("0.0.0.0", 0))  # Bind to any available port
         self.marker_status = {}
         threading.Thread(target=self.receive_updates, daemon=True).start()
 
-        self.send_update(-1) # Send an initial message to register with the server. -1 means nothing
-        logging.info(f"Marker client connected to server {self.server_host}:{self.server_port}")
-        print(f"Marker client connected to server  {self.server_host}:{self.server_port}")
+        self.send_update(-1)  # Send an initial message to register with the server
+        logging.info(f"Marker client broadcasting on {self.broadcast_ip}:{self.server_port}")
+        print(f"Marker client broadcasting on {self.broadcast_ip}:{self.server_port}")
 
-    def send_update(self, marker_id:int, detected=None, landed=None):
-        if not marker_id is None: 
+    def send_update(self, marker_id: int, detected=None, landed=None):
+        if marker_id is not None:
             message = {"marker_id": marker_id}
             if detected is not None:
                 message["detected"] = detected
@@ -118,40 +119,41 @@ class MarkerClient:
                 message["landed"] = landed
             message_json = json.dumps(message).encode()
 
-            for _ in range(3):  # Send the message 3 times
-                self.sock.sendto(message_json, (self.server_host, self.server_port))
-                time.sleep(0.05)  # Small delay to prevent flooding
+            for _ in range(5):  # Send the message 5 times for reliability
+                self.sock.sendto(message_json, (self.broadcast_ip, self.server_port))
+                time.sleep(0.03)  # Small delay to prevent flooding
 
             logging.debug(f"MarkerClient sent {message}")
 
-    def receive_updates(self):  # background thread, does not print directly! DO NOT call this directly.
+    def receive_updates(self):  # Background thread
         while True:
             try:
                 data, _ = self.sock.recvfrom(1024)
                 self.marker_status = json.loads(data.decode())
                 logging.debug(f"Received marker status from server: {self.marker_status}")
-            except socket.timeout:  # Handle timeouts (if you set a timeout on the socket)
+            except socket.timeout:  # Handle timeouts (if a timeout is set)
                 pass
-            except Exception as e: # Catch any other exceptions
+            except Exception as e:  # Catch any other exceptions
                 logging.error(f"Error receiving updates: {e}")
 
     def is_marker_available(self, marker_id):
         marker_id = str(marker_id)  # Ensure it's a string to match dictionary keys
-        marker_data = self.marker_status.get(marker_id)  # Get the marker's data
-
+        marker_data = self.marker_status.get(marker_id)
         if marker_data is None:
             return True  # Marker has never been seen before -> Available
-
         detected = marker_data.get("detected", False)
-        detected_True = marker_data.get("detected", True)
         landed = marker_data.get("landed", False)
-        logging.debug(f"{detected} and {landed} = {detected and landed} ---- {detected_True}")
         return not (detected or landed)  # If either is True, it's NOT available
-    
+
     def get_invalid_markers(self, markers_list: list) -> list:
-        """
-        Takes a list of valid markers, and checks it against marker_status. 
-        :return: List of invalid markers 
-        """
         return [id for id in markers_list if not self.is_marker_available(id)]
     
+if __name__ == "__main__":      # Usually should not run directly?
+    file_handler = logging.FileHandler("log_markerserver.log", mode='w')  # Log to a file (overwrite each run)
+    console_handler = logging.StreamHandler()  # Log to the terminal
+    formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+    server = MarkerServer()
+    server.run()

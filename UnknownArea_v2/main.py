@@ -1,21 +1,11 @@
-# WORKS 23 JAN: Reads waypoint JSON file and executes it, then changes over to navigation_thread to use depth-mapping and lands on valid marker.
-# IMPT: Must be connected to drone to work!
-# Testing 6 Feb modularised
-# Testing 11 Feb markerserverclient
-
 """
-Change Log:
-# 23 Jan: Works even without ToF; Can run without flying using NO_FLY = True; Press q to exit and land
-# 24 Jan: Can stream and work over RPi17; TODO: video stream thread, ToF doesn't work well over RPi
-# 29 Jan: Rework 2D and 3D distance mapping, Calibration
-# 30 Jan: Distance calculation should be quite precise now, no need for hard-coded offsets. Will not work for victims not on the floor (TBC if need)
-# 6 Feb: BIG Changes
-    - 
-    -
-    -
-    - (IMPT) Run in terminal from main workspace as "python -m UnknownArea_v2.main"
-        python -m UnknownArea_v2.main
-Takes up 23% of CPU per nav_thread (Gab's computer)
+(IMPT) Run in terminal from main workspace as:
+    python -m UnknownArea_v2.main
+
+TODO 11 Feb: 
+- ToF doesn't work well over RPi
+
+Takes up 23% of CPU per nav_thread. Running two nav_threads already takes up 100% CPU. (Gab's computer)
 """
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
@@ -170,13 +160,13 @@ def navigation_thread(controller):
                     if controller.markernum_lockedon is None or marker_id == controller.markernum_lockedon: # first time detecting an available marker, or subsequent time detecting a marker locked on by it (but shown as no longer available)
                         controller.markernum_lockedon = marker_id
                         controller.marker_client.send_update(marker_id, detected=True) 
-                        logging.info(f"Valid marker {marker_id} available and locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
+                        logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
                         goto_approach_sequence = True
                         cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (250, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
 
                     else:   # detected a valid and available marker, but it's different from the one locked onto previously
-                        logging.debug(f"Switching lock-on from {controller.markernum_lockedon} to {marker_id}.")
+                        logging.debug(f"Switching lock-on from {controller.markernum_lockedon} to {marker_id}...")
                         controller.marker_client.send_update(controller.markernum_lockedon, detected=False) 
                         controller.markernum_lockedon = marker_id   # locking onto the new one
                         controller.marker_client.send_update(controller.markernum_lockedon, detected=True)
