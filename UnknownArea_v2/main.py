@@ -15,16 +15,23 @@ Change Log:
     -
     - (IMPT) Run in terminal from main workspace as "python -m UnknownArea_v2.main"
         python -m UnknownArea_v2.main
+Takes up 23% of CPU per nav_thread (Gab's computer)
 """
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
 # Logging handlers and format (IMPT: Must be before importing other modules!?)
 file_handler = logging.FileHandler("log_UnknownSearchArea_main.log", mode='w')  # Log to a file (overwrite each run)
 console_handler = logging.StreamHandler()  # Log to the terminal
-formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
+formatter = logging.Formatter("%(levelname)s - %(name)s - %(asctime)s - %(message)s")
 file_handler.setFormatter(formatter)
 console_handler.setFormatter(formatter)
 logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
+
+# IDK TESTING 11 FEB
+# logger = logging.getLogger(__name__)
+logger = logging.getLogger("ABC")
+logger.addHandler(file_handler)
+logger.info("TESTING NEW LOGGER")
 
 from PPFLY2.main import execute_waypoints
 

@@ -1,7 +1,5 @@
 import tkinter as tk
 from tkinter import ttk
-import threading
-import time
 from markerserverclient import MarkerClient
 
 class MarkerStatusGUI:
@@ -45,9 +43,12 @@ class MarkerStatusGUI:
         for marker_id, status in self.client.marker_status.items():
             detected = status.get("detected", False)
             landed = status.get("landed", False)
-            self.tree.insert("", "end", values=(marker_id, detected, landed))
 
+            # Use Unicode green check (✔) and red cross (❌) for clarity
+            detected_str = f"✔ True" if detected else f"❌ False"
+            landed_str = f"✔ True" if landed else f"❌ False"
+
+            self.tree.insert("", "end", values=(marker_id, detected_str, landed_str))
 
 if __name__ == "__main__":
-    # Start the GUI
     MarkerStatusGUI(server_host="127.0.0.1", server_port=5005)

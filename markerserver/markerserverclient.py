@@ -17,20 +17,27 @@ class MarkerServer:
     def accept_connections(self):
         while True:
             try:
-                data, addr = self.sock.recvfrom(1024)  # Wait for initial data
+                logging.debug(f"Current Clients: {self.clients}")
+                data, addr = self.sock.recvfrom(1024)
+                logging.debug(f"Data: {data}, Addr: {addr}")
                 if addr not in self.clients:
                     self.clients.add(addr)
                     logging.info(f"New client connected: {addr}")
-                    # Immediately broadcast the current status to the new client
-                    self.broadcast_status_to_one(addr) #<--- Add this line
-            except Exception as e:
-                logging.error(f"Error accepting connection: {e}")  # Handle errors
+                    self.broadcast_status_to_one(addr)
+            except socket.error as e:
+                if e.errno == 10054:  # Client disconnected forcibly
+                    logging.warning(f"Client {addr} disconnected unexpectedly: {e}")
+                    self.clients.discard(addr)  # Remove from active clients
+                    logging.debug(f"Current Clients after discarding: {self.clients}")
+                else:
+                    logging.error(f"Error handling client connection: {e}")
+
 
     def handle_messages(self):
         while True:
             data, addr = self.sock.recvfrom(1024)
             message = json.loads(data.decode())
-            logging.debug(f"MESSAGE: {message}")
+            logging.debug(f"Handling message: {message}")
             if message:
                 self.update_marker_status(message)
             self.broadcast_status()
@@ -60,8 +67,22 @@ class MarkerServer:
     def broadcast_status(self):
         with self.lock:
             status_json = json.dumps(self.marker_status)
+            disconnected_clients = set()
+
             for addr in self.clients:
-                self.sock.sendto(status_json.encode(), addr)
+                try:
+                    self.sock.sendto(status_json.encode(), addr)
+                except socket.error as e:
+                    if e.errno == 10054:  # Handle unexpected disconnection
+                        logging.warning(f"Client {addr} disconnected unexpectedly: {e}")
+                        disconnected_clients.add(addr)  # Mark for removal
+                    else:
+                        logging.error(f"Error sending data to {addr}: {e}")
+
+            # Remove all disconnected clients after iteration
+            for client in disconnected_clients:
+                self.clients.discard(client) 
+
 
     def run(self):
         self.clients = set()
