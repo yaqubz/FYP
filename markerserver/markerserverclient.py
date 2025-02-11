@@ -72,9 +72,7 @@ class MarkerServer:
 
         # Keep the main thread alive (you might not need this if you have other tasks)
         while True:
-            # You might have other things to do in the main thread here
-            # Or you can just remove this loop and let the daemon threads run
-            pass  # Or time.sleep(1) if you want to reduce CPU usage
+            time.sleep(1)
 
 
 class MarkerClient:
