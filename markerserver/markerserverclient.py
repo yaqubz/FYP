@@ -143,7 +143,15 @@ class MarkerClient:
             return True  # Marker has never been seen before -> Available
 
         detected = marker_data.get("detected", False)
+        detected_True = marker_data.get("detected", True)
         landed = marker_data.get("landed", False)
-
+        logging.debug(f"{detected} and {landed} = {detected and landed} ---- {detected_True}")
         return not (detected or landed)  # If either is True, it's NOT available
+    
+    def get_invalid_markers(self, markers_list: list) -> list:
+        """
+        Takes a list of valid markers, and checks it against marker_status. 
+        :return: List of invalid markers 
+        """
+        return [id for id in markers_list if not self.is_marker_available(id)]
     

@@ -55,11 +55,14 @@ EXTRA_HEIGHT = 0   # cm; for demo purpose if obstacle is higher than the ground
 
 # Define network configuration constants
 NETWORK_CONFIG = {
-    # 'host': '192.168.0.117',  # if connected through RPi 17
+    # 'host': '192.168.0.103',  # if connected through RPi
+    # 'control_port': 9003,
+    # 'state_port': 8003,
+    # 'video_port': 11103
     'host': '192.168.10.1',     # if connected directly through WiFi
     'control_port': 8889,
     'state_port': 8890,
-    'video_port': 11111
+    'video_port': 11111    
 }
 
 def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
@@ -155,33 +158,35 @@ def navigation_thread(controller):
             marker_found = False
             
             # Check for markers
-            marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame)   # returns details of ONE valid marker
+            marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
             if marker_found:  
                 # Draw marker detection and pose information on the ONE detected valid marker
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
                 logging.info(f"Obtained Marker Status from Server: {controller.marker_client.marker_status}")
-                logging.debug(f"Marker detected: {marker_id}. Available: {controller.marker_client.is_marker_available(marker_id)}")
+                logging.debug(f"Marker detected: {marker_id}. Available: {controller.marker_client.is_marker_available(marker_id)}. Currently locked on: {controller.markernum_lockedon}")
 
                 # Difficult logic, discussed between Yaqub and Gab 11 Feb
                 if controller.marker_client.is_marker_available(marker_id) or marker_id == controller.markernum_lockedon:
-
                     if controller.markernum_lockedon is None or marker_id == controller.markernum_lockedon: # first time detecting an available marker, or subsequent time detecting a marker locked on by it (but shown as no longer available)
                         controller.markernum_lockedon = marker_id
                         controller.marker_client.send_update(marker_id, detected=True) 
                         logging.info(f"Valid marker {marker_id} available and locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
                         goto_approach_sequence = True
+                        cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (250, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+
 
                     else:   # detected a valid and available marker, but it's different from the one locked onto previously
+                        logging.debug(f"Switching lock-on from {controller.markernum_lockedon} to {marker_id}.")
                         controller.marker_client.send_update(controller.markernum_lockedon, detected=False) 
                         controller.markernum_lockedon = marker_id   # locking onto the new one
                         controller.marker_client.send_update(controller.markernum_lockedon, detected=True)
                         goto_approach_sequence = False
                     
                 else: # marker detected is NOT available
-                    logging.info(f"Valid marker {marker_id} is NOT available.")
+                    logging.info(f"Valid marker {marker_id} is NOT available (and not already locked-on previously).")
                     goto_approach_sequence = False
                 
-                if goto_approach_sequence is True and not NO_FLY:   # i.e. is not None                    
+                if goto_approach_sequence is True and not NO_FLY:                  
                     logging.info(f"Still locked on and approaching marker {controller.markernum_lockedon}...")
                     
                     # Center on the marker

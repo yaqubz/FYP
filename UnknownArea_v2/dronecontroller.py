@@ -41,9 +41,10 @@ class DroneController:
         self.markernum_lockedon:int = None
         self.is_centered = False
         self.movement_completed = False
-        self.valid_ids = set(range(1, 12))  # Temporary 29 Jan
-        self.invalid_ids = set(range(12, 15))
-        self.exit_ids = set(range(50, 100)) # Added 3 Feb - for drone to avoid exiting search area
+        self.valid_ids = set(range(1, 9))   # set because doesn't change
+        self.invalid_ids = []               # detected/landed by other drones, updated by MarkerClient
+        self.danger_ids = set(range(9, 15)) # set because doesn't change
+        self.exit_ids = set(range(50, 100)) # set because doesn't change; for drone to avoid exiting search area
         self.exit_detected = False
         self.exit_distance_3D = None
         self.marker_positions = {}
@@ -135,6 +136,9 @@ class DroneController:
         # Reset target yaw when no markers detected
         self.target_yaw = None
 
+        self.invalid_ids = self.marker_client.get_invalid_markers(self.valid_ids)   # To deactivate marker detection for markers already detected by others
+        logging.debug(f"Invalid markers: {self.invalid_ids}")
+
         if ids is not None:
             detected_ids = ids.flatten()
             logging.debug(f"Detected IDs: {detected_ids}")
@@ -151,8 +155,11 @@ class DroneController:
                     corners[i].reshape(1, 4, 2), marker_size, CAMERA_MATRIX, DIST_COEFF
                 )
 
-                # If it's a valid marker, store its info
-                if marker_id in self.valid_ids:
+                # Return info if marker_id is valid AND either 
+                    #  1. Not invalid (detected by another drone), OR
+                    #  2. Already locked onto by itself
+
+                if marker_id in self.valid_ids and (not marker_id in self.invalid_ids or marker_id == self.markernum_lockedon):
                     x, y, z = tvecs[0][0]
                     euclidean_distance = np.sqrt(x*x + y*y + z*z)
                     marker_center = np.mean(corners[i][0], axis=0)
@@ -161,7 +168,7 @@ class DroneController:
                     self.set_distance(euclidean_distance)
                     logging.debug(f"Marker Centre: {marker_center}")
 
-                    return True, corners[i], int(marker_id), rvecs[0], tvecs[0]  # Return only the FIRST valid marker
+                    return True, corners[i], int(marker_id), rvecs[0], tvecs[0]  # Returns only the FIRST valid marker that fulfils the two criteria above (1, 2)
 
                 # If it's an exit marker, compute its yaw
                 elif marker_id in self.exit_ids:
