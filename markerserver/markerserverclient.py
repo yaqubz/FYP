@@ -2,98 +2,150 @@
 # Run in the background to reset
 
 import threading, socket, json, time
-import logging  # To take on the logging config of the parent script!
+import logging
+from typing import Dict, Set, Any
 
 class MarkerServer:
-    def __init__(self, host='0.0.0.0', port=5005):
+    def __init__(self, host='0.0.0.0', port=5005, timeout=5):
         self.host = host
         self.port = port
-        self.marker_status = {}  # {marker_id: {"detected": bool, "landed": bool}}
+        self.timeout = timeout
+        self.marker_status: Dict[str, Dict[str, Any]] = {}
+        self.clients: Set[tuple] = set()
         self.lock = threading.Lock()
+        self.last_updates: Dict[str, float] = {}  # Track last update time for each marker
+        
+        # Create main socket for receiving broadcasts
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Allow broadcast reception
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.sock.bind((self.host, self.port))
+        
+        # Create separate socket for sending broadcasts
+        self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        
         logging.info(f"Marker server started on {self.host}:{self.port}")
 
-
-    def accept_connections(self):
+    def check_timeouts(self):
+        """Check for markers that haven't been updated and clear their detected status"""
         while True:
             try:
-                logging.debug(f"Current Clients: {self.clients}")
-                data, addr = self.sock.recvfrom(1024)
-                logging.debug(f"Data: {data}, Addr: {addr}")
-                if addr not in self.clients:
-                    self.clients.add(addr)
-                    logging.info(f"New client connected: {addr}")
-                    self.broadcast_status_to_one(addr)
-            except socket.error as e:
-                if e.errno == 10054:  # Client disconnected forcibly
-                    logging.warning(f"Client {addr} disconnected unexpectedly: {e}")
-                    self.clients.discard(addr)  # Remove from active clients
-                    logging.debug(f"Current Clients after discarding: {self.clients}")
-                else:
-                    logging.error(f"Error handling client connection: {e}")
+                current_time = time.time()
+                status_changed = False
+                
+                with self.lock:
+                    for marker_id in list(self.marker_status.keys()):
+                        last_update = self.last_updates.get(marker_id, 0)
+                        if current_time - last_update > self.timeout:
+                            if marker_id in self.marker_status and self.marker_status[marker_id].get("detected", False):
+                                logging.info(f"Clearing detected status for marker {marker_id} due to timeout")
+                                self.marker_status[marker_id]["detected"] = False
+                                status_changed = True
+                
+                if status_changed:
+                    self.broadcast_status()  # Broadcast updates to all clients
+                
+                time.sleep(1)  # Check every second
+            except Exception as e:
+                logging.error(f"Error in check_timeouts: {e}")
+                time.sleep(1)
 
+    def update_marker_status(self, message):
+        """Update marker status and timestamp"""
+        with self.lock:
+            try:
+                marker_id = str(message["marker_id"])
+                if marker_id != "-1" and marker_id is not None:
+                    # Initialize marker status if not exists
+                    if marker_id not in self.marker_status:
+                        self.marker_status[marker_id] = {
+                            "detected": False,
+                            "landed": False
+                        }
+                    
+                    # Update status
+                    if "detected" in message:
+                        self.marker_status[marker_id]["detected"] = message["detected"]
+                        # Only update timestamp if marker is detected
+                        if message["detected"]:
+                            self.last_updates[marker_id] = time.time()
+                    
+                    if "landed" in message:
+                        self.marker_status[marker_id]["landed"] = message["landed"]
+                    
+                    logging.debug(f"Updated marker {marker_id} status: {self.marker_status[marker_id]}")
+            except Exception as e:
+                logging.error(f"Error updating marker status: {e}")
 
     def handle_messages(self):
         while True:
-            data, addr = self.sock.recvfrom(1024)
-            message = json.loads(data.decode())
-            logging.debug(f"Handling message: {message}")
-            if message:
-                self.update_marker_status(message)
-            self.broadcast_status()
+            try:
+                data, addr = self.sock.recvfrom(1024)
+                try:
+                    message = json.loads(data.decode())
+                    logging.debug(f"Received message from {addr}: {message}")
+                    
+                    # Handle client registration message
+                    if message.get("marker_id") == -1:
+                        if addr not in self.clients:
+                            with self.lock:
+                                self.clients.add(addr)
+                                logging.info(f"New client connected: {addr}")
+                            self.broadcast_status_to_one(addr)
+                    else:
+                        self.update_marker_status(message)
+                        self.broadcast_status()
+                        
+                except json.JSONDecodeError:
+                    logging.warning(f"Received invalid JSON from {addr}: {data}")
+                    
+            except Exception as e:
+                logging.error(f"Error handling message: {e}")
 
-    def update_marker_status(self, message):
-        """
-        Updates internal class attribute.
-        """
-        with self.lock:
-            marker_id = message["marker_id"]
-            logging.debug(f"marker_id: {marker_id}")
-            if not marker_id == -1 and not marker_id == None: 
-                if marker_id not in self.marker_status:
-                    # Nested dictionary with key-values pairs (Level 1: Marker ID; Level 2: Statuses)
-                    self.marker_status[marker_id] = {"detected": False, "landed": False}
-                if "detected" in message:
-                    self.marker_status[marker_id]["detected"] = message["detected"]
-                if "landed" in message:
-                    self.marker_status[marker_id]["landed"] = message["landed"]
-                logging.info(f"Marker Statuses: {self.marker_status}")
-
-    def broadcast_status_to_one(self, addr): #<--- Add this function
-        with self.lock:
-            status_json = json.dumps(self.marker_status)
-            self.sock.sendto(status_json.encode(), addr)
+    def broadcast_status_to_one(self, addr):
+        try:
+            with self.lock:
+                status_json = json.dumps(self.marker_status).encode()
+                self.broadcast_sock.sendto(status_json, addr)
+        except Exception as e:
+            logging.error(f"Error broadcasting to {addr}: {e}")
 
     def broadcast_status(self):
-        with self.lock:
-            status_json = json.dumps(self.marker_status)
-            disconnected_clients = set()
-
-            for addr in self.clients:
-                try:
-                    self.sock.sendto(status_json.encode(), addr)
-                except socket.error as e:
-                    if e.errno == 10054:  # Handle unexpected disconnection
-                        logging.warning(f"Client {addr} disconnected unexpectedly: {e}")
-                        disconnected_clients.add(addr)  # Mark for removal
-                    else:
-                        logging.error(f"Error sending data to {addr}: {e}")
-
-            # Remove all disconnected clients after iteration
-            for client in disconnected_clients:
-                self.clients.discard(client) 
-
+        try:
+            with self.lock:
+                status_json = json.dumps(self.marker_status).encode()
+                
+                dead_clients = set()
+                for client_addr in self.clients:
+                    try:
+                        self.broadcast_sock.sendto(status_json, client_addr)
+                    except Exception as e:
+                        logging.warning(f"Failed to send to client {client_addr}: {e}")
+                        dead_clients.add(client_addr)
+                
+                # Remove dead clients
+                self.clients -= dead_clients
+                if dead_clients:
+                    logging.info(f"Removed dead clients: {dead_clients}")
+        except Exception as e:
+            logging.error(f"Error in broadcast_status: {e}")
 
     def run(self):
-        self.clients = set()
-        threading.Thread(target=self.handle_messages, daemon=True).start()
-        threading.Thread(target=self.accept_connections, daemon=True).start()
-
-        # Keep the main thread alive (cannot delete)
-        while True:
-            time.sleep(1)
+        try:
+            threads = [
+                threading.Thread(target=self.handle_messages, daemon=True),
+                threading.Thread(target=self.check_timeouts, daemon=True)
+            ]
+            for thread in threads:
+                thread.start()
+            
+            # Keep main thread alive
+            while True:
+                time.sleep(1)
+        except Exception as e:
+            logging.error(f"Error in server run: {e}")
 
 
 class MarkerClient:
