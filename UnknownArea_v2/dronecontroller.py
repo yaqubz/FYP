@@ -10,9 +10,9 @@ from .utils import *
 from markerserver.markerserverclient import MarkerClient
 
 class DroneController:
-    def __init__(self, network_config, simulate = False):
+    def __init__(self, network_config, laptop_only = False):
         # Initialize Tello
-        self.drone = MockTello() if simulate else CustomTello(network_config)
+        self.drone = MockTello() if laptop_only else CustomTello(network_config)
         self.drone.connect()
         logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
         self.drone.streamon()
@@ -121,56 +121,69 @@ class DroneController:
         with self.forward_tof_lock:
             return self.forward_tof_dist
 
-    def detect_markers(self, frame, marker_size=14.0):
+    def detect_markers(self, frame, display_frame, marker_size=14.0):
         """
-        Detect ArUco markers and estimate pose
-        Returns values of the FIRST DETECTED VALID MARKER 
+        Detect ArUco markers and estimate pose.
+        Returns values of the FIRST DETECTED VALID MARKER.
+
+        Additionally, calculates the distance between the detected marker and a danger marker if present.
+
         :return:
-            marker_id:int         
+            marker_detected (bool), marker_corners, marker_id (int), rotation_vec, translation_vec
         """
         global CAMERA_MATRIX, DIST_COEFF
         aruco_dict = aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_250)
         parameters = aruco.DetectorParameters()
         corners, ids, rejected = aruco.detectMarkers(frame, aruco_dict, parameters=parameters)
-        
-        # Reset target yaw when no markers detected
-        self.target_yaw = None
 
-        self.invalid_ids = self.marker_client.get_invalid_markers(self.valid_ids)   # To deactivate marker detection for markers already detected by others
+        # Reset class attributes, for re-detection
+        self.target_yaw = None
+        self.danger_marker_distance = None 
+        self.exit_detected = False
+        self.exit_distance_3D = None 
+
+        self.invalid_ids = self.marker_client.get_invalid_markers(self.valid_ids)
         logging.debug(f"Invalid markers: {self.invalid_ids}")
 
         if ids is not None:
             detected_ids = ids.flatten()
             logging.debug(f"Detected IDs: {detected_ids}")
 
-            # Check for exit markers
+            # Check for exit markers - drone's subsequent behaviour is not coded here
             if set(detected_ids).intersection(self.exit_ids):
                 self.exit_detected = True
                 logging.info("Exit marker detected!")
 
-            # Process markers for pose and yaw calculation
+            # Store first valid marker only
+            valid_marker_info = {}   # only stores ONE valid marker info
+            danger_marker_info = {}  # Store all danger markers
+
             for i, marker_id in enumerate(detected_ids):
-                # Estimate pose for ALL markers
                 rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
                     corners[i].reshape(1, 4, 2), marker_size, CAMERA_MATRIX, DIST_COEFF
                 )
+                x, y, z = tvecs[0][0]
+                euclidean_distance = np.sqrt(x*x + y*y + z*z)
 
-                # Return info if marker_id is valid AND either 
-                    #  1. Not invalid (detected by another drone), OR
-                    #  2. Already locked onto by itself
-
-                if marker_id in self.valid_ids and (not marker_id in self.invalid_ids or marker_id == self.markernum_lockedon):
-                    x, y, z = tvecs[0][0]
-                    euclidean_distance = np.sqrt(x*x + y*y + z*z)
-                    marker_center = np.mean(corners[i][0], axis=0)
-                    
-                    # Store basic marker info
-                    self.set_distance(euclidean_distance)
-                    logging.debug(f"Marker Centre: {marker_center}")
-
-                    return True, corners[i], int(marker_id), rvecs[0], tvecs[0]  # Returns only the FIRST valid marker that fulfils the two criteria above (1, 2)
-
-                # If it's an exit marker, compute its yaw
+                if marker_id in self.valid_ids and (marker_id not in self.invalid_ids or marker_id == self.markernum_lockedon):
+                    if not valid_marker_info:  # Ensures only first valid marker is stored
+                        valid_marker_info = {
+                            "id": int(marker_id),  # Ensure ID is a Python int
+                            "position": (x, y, z),
+                            "distance": euclidean_distance,
+                            "corners": corners[i],
+                            "rvecs": rvecs[0],
+                            "tvecs": tvecs[0]
+                        }
+                elif marker_id in self.danger_ids:  # Store danger marker details
+                    danger_marker_info[marker_id] = {
+                        "position": (x, y, z),
+                        "distance": euclidean_distance,
+                        "corners": corners[i],
+                        "rvecs": rvecs[0],
+                        "tvecs": tvecs[0]
+                    }
+                # If it's an exit marker, compute its distance and yaw
                 elif marker_id in self.exit_ids:
                     x, y, z = tvecs[0][0]
                     euclidean_distance = np.sqrt(x*x + y*y + z*z)
@@ -180,8 +193,54 @@ class DroneController:
                     # Calculate yaw (rotation around Z-axis)
                     yaw = np.arctan2(R[1, 0], R[0, 0])  # Yaw in radians
                     self.target_yaw = np.degrees(yaw)
-                    logging.info(f"Exit marker yaw: {self.target_yaw:.2f}°")
+                    logging.debug(f"Exit marker yaw: {self.target_yaw:.2f}°")
+
+            # Compute distance to the nearest danger marker (if any)
+            shortest_danger_distance = float("inf")  
+            shortest_id = None
+            closest_danger_marker = None  
+
+            if valid_marker_info:
+                for danger_id, danger_data in danger_marker_info.items():
+                    dx = valid_marker_info["position"][0] - danger_data["position"][0]
+                    dy = valid_marker_info["position"][1] - danger_data["position"][1]
+                    dz = valid_marker_info["position"][2] - danger_data["position"][2]
+                    computed_distance = np.sqrt(dx*dx + dy*dy + dz*dz)
+
+                    if computed_distance < shortest_danger_distance:
+                        shortest_danger_distance = computed_distance
+                        shortest_id = danger_id
+                        closest_danger_marker = danger_data  
+
+                if shortest_id is not None:
+                    self.danger_marker_distance = shortest_danger_distance
+                    logging.info(f"Danger marker {shortest_id} detected. Distance: {shortest_danger_distance:.2f}m")
+
+                    # Compute marker center
+                    marker_center = tuple(map(int, np.mean(closest_danger_marker["corners"][0], axis=0)))
+
+                    # Draw marker annotations
+                    cv2.circle(display_frame, marker_center, 10, (0, 0, 255), -1)  # Red dot for danger marker
+
+                    cv2.polylines(display_frame, 
+                                [closest_danger_marker["corners"].astype(np.int32)], 
+                                True, (0, 0, 255), 2)  # Red bounding box
+
+                    cv2.putText(display_frame, 
+                                f"ID: {shortest_id} Dist to {valid_marker_info["id"]}: {shortest_danger_distance:.2f}m", 
+                                (marker_center[0], marker_center[1] - 20),  
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+                    # Draw coordinate axes for the danger marker
+                    cv2.drawFrameAxes(display_frame, CAMERA_MATRIX, DIST_COEFF, 
+                                    closest_danger_marker["rvecs"], 
+                                    closest_danger_marker["tvecs"], 
+                                    10)
+
+            # Return the first valid marker detected
+            if valid_marker_info:
+                self.set_distance(valid_marker_info["distance"])
+                return True, valid_marker_info["corners"], valid_marker_info["id"], valid_marker_info["rvecs"], valid_marker_info["tvecs"]
 
         self.set_distance(None)
         return False, None, None, None, None
-

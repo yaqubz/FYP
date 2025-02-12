@@ -41,7 +41,7 @@ import os
 LAPTOP_ONLY = True # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
 NO_FLY = True     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 
-EXTRA_HEIGHT = 10   # cm; if victim is higher than ground level (especially if detecting vertical face) 
+EXTRA_HEIGHT = 0   # cm; if victim is higher than ground level (especially if detecting vertical face) 
 
 # Define network configuration constants
 NETWORK_CONFIG = {
@@ -112,7 +112,7 @@ def navigation_thread(controller):
             marker_found = False
             
             # Check for markers
-            marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
+            marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame, display_frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
             if marker_found:  
                 # Draw marker detection and pose information on the ONE detected valid marker
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
@@ -208,15 +208,17 @@ def navigation_thread(controller):
             
             elif controller.exit_detected: # This condition is placed after marker_detected but before depth mapping 
                 ## MTD 1: Simple U-turn when detected
+                exit_text:str = f"Exit detected {controller.exit_distance_3D:.0f}cm away."
+                logging.info("No valid markers detected." + exit_text)
+                cv2.putText(display_frame, exit_text, (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 if not NO_FLY and controller.exit_distance_3D < 300:
-                    logging.info(f"Avoiding exit {controller.exit_distance_3D:.0f}cm away. Turning 180 degrees.")
+                    logging.info(f"Avoiding exit. Turning 180 degrees.")
                     controller.drone.rotate_clockwise(180)
 
                 elif not NO_FLY:
-                    logging.info(f"Exit {controller.exit_distance_3D:.0f}cm away. More than 3m away, no action taken.")
+                    logging.info(f"Exit more than 3m away, no action taken.")
 
-                controller.exit_detected = False    # resets, then always needs redetection
-                controller.exit_distance_3D = None
+
                 
                 ## MTD 2: TESTING "FORCE-FIELD METHOD"
                 # if controller.target_yaw is not None:
@@ -303,7 +305,7 @@ def navigation_thread(controller):
 def main():
     global CAMERA_MATRIX, DIST_COEFF
 
-    controller = DroneController(NETWORK_CONFIG, simulate=LAPTOP_ONLY)
+    controller = DroneController(NETWORK_CONFIG, laptop_only=LAPTOP_ONLY)
     try:
         logging.info("Taking off...")
         if not NO_FLY:    
