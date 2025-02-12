@@ -41,7 +41,7 @@ import os
 LAPTOP_ONLY = True # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
 NO_FLY = True     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 
-EXTRA_HEIGHT = 0   # cm; for demo purpose if obstacle is higher than the ground 
+EXTRA_HEIGHT = 10   # cm; if victim is higher than ground level (especially if detecting vertical face) 
 
 # Define network configuration constants
 NETWORK_CONFIG = {
@@ -54,42 +54,6 @@ NETWORK_CONFIG = {
     'state_port': 8890,
     'video_port': 11111    
 }
-
-def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
-    """Draw pose estimation axes and information on frame"""
-    logging.debug(f"ID {ids} found. Drawing axes.")
-    marker_center = np.mean(corners[0], axis=0)
-    cv2.circle(frame, 
-                (int(marker_center[0]), int(marker_center[1])), 
-                10, (0, 255, 0), -1)
-    cv2.polylines(frame, 
-                [corners[0].astype(np.int32)], 
-                True, (0, 255, 0), 2)
-    cv2.putText(frame, 
-                f"ID: {ids}", 
-                (int(marker_center[0]), int(marker_center[1] - 20)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-       
-    cv2.drawFrameAxes(
-        frame, CAMERA_MATRIX, DIST_COEFF, rvecs, tvecs, 10
-    )
-    
-    rot_matrix = cv2.Rodrigues(rvecs)[0]
-    euler_angles = cv2.RQDecomp3x3(rot_matrix)[0]
-    x, y, z = tvecs[0]
-    roll, pitch, yaw = euler_angles
-    
-    euclidean_distance = np.sqrt(x*x + y*y + z*z)
-    
-    position_text = f"Pos (cm): X:{x:.1f} Y:{y:.1f} Z:{z:.1f}"
-    rotation_text = f"Rot (deg): R:{roll:.1f} P:{pitch:.1f} Y:{yaw:.1f}"
-    distance_text = f"3D Distance: {euclidean_distance:.1f} cm"
-    
-    cv2.putText(frame, position_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    cv2.putText(frame, rotation_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    cv2.putText(frame, distance_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    
-    return frame
 
 def tof_update_thread(controller, Hz: float = 2):
     """
@@ -156,6 +120,7 @@ def navigation_thread(controller):
                 logging.debug(f"Marker detected: {marker_id}. Available: {controller.marker_client.is_marker_available(marker_id)}. Currently locked on: {controller.markernum_lockedon}")
 
                 # Difficult logic, discussed between Yaqub and Gab 11 Feb
+                # Also works without a server, since .is_marker_available will return True
                 if controller.marker_client.is_marker_available(marker_id) or marker_id == controller.markernum_lockedon:
                     if controller.markernum_lockedon is None or marker_id == controller.markernum_lockedon: # first time detecting an available marker, or subsequent time detecting a marker locked on by it (but shown as no longer available)
                         controller.markernum_lockedon = marker_id

@@ -155,7 +155,8 @@ class MarkerClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Enable broadcast
         self.sock.bind(("0.0.0.0", 0))  # Bind to any available port
-        self.marker_status = {}
+        
+        self.marker_status = {}         # Keeps a local copy of marker_status, to be updated by the server through the receive_updates thread
         threading.Thread(target=self.receive_updates, daemon=True).start()
 
         self.send_update(-1)  # Send an initial message to register with the server
@@ -193,9 +194,9 @@ class MarkerClient:
         marker_data = self.marker_status.get(marker_id)
         if marker_data is None:
             return True  # Marker has never been seen before -> Available
-        detected = marker_data.get("detected", False)
-        landed = marker_data.get("landed", False)
-        return not (detected or landed)  # If either is True, it's NOT available
+        detected = marker_data.get("detected", False)   # False is the default value to return if "detected" key doesn't exist. If "detected": False, also returns false.
+        landed = marker_data.get("landed", False)       # refer to TEST_markerstatusdict.py 
+        return not (detected or landed)  # If either is True, it's NOT available. If no server, returns True by default (good for redundancy).
 
     def get_invalid_markers(self, markers_list: list) -> list:
         return [id for id in markers_list if not self.is_marker_available(id)]
