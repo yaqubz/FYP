@@ -10,20 +10,6 @@ Takes up 23% of CPU per nav_thread. Running two nav_threads already takes up 100
 """
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
-# Logging handlers and format (IMPT: Must be before importing other modules!?)
-file_handler = logging.FileHandler("log_UnknownSearchArea_main.log", mode='w')  # Log to a file (overwrite each run)
-console_handler = logging.StreamHandler()  # Log to the terminal
-formatter = logging.Formatter("%(levelname)s - %(name)s - %(asctime)s - %(message)s")
-file_handler.setFormatter(formatter)
-console_handler.setFormatter(formatter)
-logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
-
-# IDK TESTING 11 FEB
-# logger = logging.getLogger(__name__)
-customlogger = logging.getLogger("TestLogger")
-customlogger.addHandler(file_handler)
-customlogger.info("Starting unknown area main...")
-
 from PPFLY2.main import execute_waypoints
 
 from .dronecontroller import DroneController
@@ -39,13 +25,7 @@ from threading import Lock
 import time
 import os
 
-LAPTOP_ONLY = True # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
-
-if LAPTOP_ONLY:     # just in case
-    NO_FLY = True     
-
-EXTRA_HEIGHT = 0   # cm; if victim is higher than ground level (especially if detecting vertical face) 
+params = load_params()
 
 def tof_update_thread(controller, Hz: float = 2):
     """
@@ -76,7 +56,7 @@ def navigation_thread(controller):
     
     # Initial movement
     logging.info("Moving to initial altitude...")
-    if not NO_FLY:
+    if not params.NO_FLY:
         controller.drone.go_to_height_PID(120)
         time.sleep(1)
     
@@ -88,9 +68,7 @@ def navigation_thread(controller):
     while True:  # Main loop continues until marker found or battery low
                 
         try:
-            logging.debug("Capturing frame... Before capture_frame.")
             frame = capture_frame(frame_reader)
-            logging.debug("Frame captured! After capture_frame.")
             display_frame = frame.copy()    # Create a copy of frame for visualization
             
             # Get depth color map
@@ -145,7 +123,7 @@ def navigation_thread(controller):
                     logging.info(f"Valid marker {marker_id} is NOT available (and not already locked-on previously).")
                     goto_approach_sequence = False
                 
-                if goto_approach_sequence is True and not NO_FLY:                  
+                if goto_approach_sequence is True and not params.NO_FLY:                  
                     logging.info(f"Still locked on and centering/approaching marker {controller.markernum_lockedon}...")
                     
                     # Center on the marker
@@ -172,7 +150,7 @@ def navigation_thread(controller):
                             time.sleep(0.1)
                             continue
 
-                        current_height = controller.drone.get_distance_tof() - EXTRA_HEIGHT
+                        current_height = controller.drone.get_distance_tof() - params.EXTRA_HEIGHT
                         current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
                         logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
@@ -206,7 +184,7 @@ def navigation_thread(controller):
                             time.sleep(1)
                             break
 
-                elif goto_approach_sequence is True and NO_FLY == True: # if simulating
+                elif goto_approach_sequence is True and params.NO_FLY == True: # if simulating
                     logging.info("Marker found, but not landing since not flying. Program continues.")
 
                 else:   #goto_approach_sequence is False
@@ -217,11 +195,11 @@ def navigation_thread(controller):
                 exit_text:str = f"Exit detected {controller.exit_distance_3D:.0f}cm away."
                 logging.info("No valid markers detected." + exit_text)
                 cv2.putText(display_frame, exit_text, (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-                if not NO_FLY and controller.exit_distance_3D < 300:
+                if not params.NO_FLY and controller.exit_distance_3D < 300:
                     logging.info(f"Avoiding exit. Turning 45 degrees.")
                     controller.drone.rotate_clockwise(45)
 
-                elif not NO_FLY:
+                elif not params.NO_FLY:
                     logging.info(f"Exit more than 3m away, no action taken.")
 
 
@@ -237,7 +215,7 @@ def navigation_thread(controller):
                 #     delta_yaw = (delta_yaw + 180) % 360 - 180  # Normalize to [-180, 180]
                     
                 #     # Turn the drone (TBC direction)
-                #     if not NO_FLY:
+                #     if not params.NO_FLY:
                 #         if delta_yaw > 0:
                 #             controller.drone.rotate_clockwise(int(delta_yaw))
                 #         else:
@@ -271,13 +249,13 @@ def navigation_thread(controller):
                 else:
                     # Corner condition where center appears further than sides
                     if controller.depth_map_colors["blue"]["center"] > controller.depth_map_colors["red"]["center"] and tof_dist <= 600:
-                        if not NO_FLY:
+                        if not params.NO_FLY:
                             controller.drone.rotate_clockwise(135)
                         cv2.putText(display_frame, "Avoiding Corner", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                         logging.info("Avoiding Corner")
                     
                     elif tof_dist <= 500:   # Head-on condition
-                        if not NO_FLY:
+                        if not params.NO_FLY:
                             controller.drone.rotate_clockwise(180)
                         cv2.putText(display_frame, "Avoiding Obstacle", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                         logging.info("Avoiding Obstacle Ahead")
@@ -299,9 +277,7 @@ def navigation_thread(controller):
             cv2.imshow("Drone Navigation", combined_view)
             
             # Keyboard shortcuts! (ok 14 Feb)
-            key = cv2.waitKey(1)
-            logging.debug(f"Key Pressed: {key}")
-
+            key = cv2.waitKey(1)        # can print key to debug
             if key == ord('q'):
                 break
             elif key == ord('l'):
@@ -314,19 +290,22 @@ def navigation_thread(controller):
 
 def main():     
     global CAMERA_MATRIX, DIST_COEFF
-    params = load_params()  # defined in utils.py
-    controller = DroneController(params.NETWORK_CONFIG, laptop_only=LAPTOP_ONLY)
+   
+    # Setup logging
+    logger = setup_logging(params, "UnknownSearchArea")
+    logger.info("Starting unknown area main...")
+    controller = DroneController(params.NETWORK_CONFIG, laptop_only=params.LAPTOP_ONLY)
     try:
         logging.info("Taking off...")
-        if not NO_FLY:    
+        if not params.NO_FLY:    
             controller.drone.takeoff()
             controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
-            # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
-            execute_waypoints(params.WAYPOINTS_JSON, controller.drone, NO_FLY)
+            # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
+            execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
-            # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
+            # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
         time.sleep(2)
         
         # tof_thread = threading.Thread(target=tof_update_thread, args=(controller,2))

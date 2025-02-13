@@ -2,10 +2,10 @@
 Default params.py file; for Laptop-only simulations!
 """
 
-LAPTOP_ONLY = True # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY = True     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
+NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 
-PI_ID:int = None
+PI_ID:int = 11
 
 WAYPOINTS_JSON = "waypoint_30cm.json"
 
@@ -15,8 +15,6 @@ LOGGING_CONFIG = {
     'format': "%(levelname)s - %(name)s - %(asctime)s - %(message)s",
     'default_logger_name': "DroneController"
 }
-
-
 
 ### LESS COMMONLY TOUCHED PARAMS ###
 

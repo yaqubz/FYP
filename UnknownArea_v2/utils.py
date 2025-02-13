@@ -3,6 +3,7 @@ import time
 import os
 import logging
 import cv2
+from typing import Optional
 
 
 import importlib, sys
@@ -164,16 +165,18 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
     
     return frame
 
+
+
 def load_params():
     """
-    Loads a params.py file via the command line. Allows multiple drones to run on the same script, just with different params files.
-    IMPT: Cannot use Logger yet since not yet initialized! Will be initialized in the params.py file.
+    Loads a params.py file via the command line. Allows multiple drones to run on the same script.
     Example usage: 
         python -m UnknownArea_v2.main UnknownArea_v2.params2
 
-    :return: params: The module name that needs to be called (e.g. params.NETWORK_CONFIG)
+    Returns:
+        params: The module containing configuration parameters
     """
-    default_params = "UnknownArea_v2.params"       # default params.py
+    default_params = "UnknownArea_v2.params"
     if len(sys.argv) < 2:
         print("Load Params Usage: python script_name.py <params_module>. Trying default params.py.")  
         params_module = default_params
@@ -185,9 +188,45 @@ def load_params():
         print(f"Successfully loaded parameters from {params_module}!")
         return params
     except ModuleNotFoundError:
-        logging.info(f"Error: Module {params_module} not found. Exiting script.")
+        print(f"Error: Module {params_module} not found. Exiting script.")
         sys.exit(1)
 
+def setup_logging(params: object, logger_name: Optional[str] = None) -> logging.Logger:
+    """
+    Sets up logging configuration based on parameters from params.py
+    
+    Args:
+        params: Module containing logging configuration
+        logger_name: Optional name for the logger. If None, uses default from params
+    
+    Returns:
+        logging.Logger: Configured logger instance
+    """
+    # Get logging parameters
+    config = params.LOGGING_CONFIG
+    log_level = getattr(logging, config['level'].upper())
+    
+    # Create handlers
+    file_handler = logging.FileHandler(config['filename'], mode='w')
+    console_handler = logging.StreamHandler()
+    
+    # Create formatter
+    formatter = logging.Formatter(config['format'])
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+    
+    # Configure root logger
+    logging.basicConfig(
+        level=log_level,
+        handlers=[file_handler, console_handler]
+    )
+    
+    # Create and configure specific logger
+    logger_name = logger_name or config['default_logger_name']
+    logger = logging.getLogger(logger_name)
+    logger.addHandler(file_handler)
+    
+    return logger
 
 CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
-logging.debug("Calibration parameters obtained.")
+print("Calibration parameters obtained.")
