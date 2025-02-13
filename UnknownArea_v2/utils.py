@@ -5,6 +5,8 @@ import logging
 import cv2
 
 
+import importlib, sys
+
 def get_calibration_parameters(TELLO_NO: str = 'D'): # BEST VERSION 30 JAN, V2.2 (to be tested)
     """
     Retrieves the camera matrix and distortion coefficients for the specified Tello drone.
@@ -66,6 +68,46 @@ def get_calibration_parameters(TELLO_NO: str = 'D'): # BEST VERSION 30 JAN, V2.2
 #     return cam_mat, dist_coef
 
 
+# NEW 13 FEB DOESNT WORK - trying to reduce the frame errors
+
+# def capture_frame(frame_reader, max_retries: int = 3):
+#     """
+#     Optimized frame capture function to minimize packet loss and decoding errors.
+#     """
+#     retry_count = 0
+#     frame = None
+
+#     while retry_count < max_retries:
+#         try:
+#             # Get the latest frame
+#             frame = frame_reader.frame
+
+#             # Ensure frame is valid
+#             if frame is None or frame.size == 0:
+#                 logging.warning("Empty or corrupt frame received, retrying...")
+#                 retry_count += 1
+#                 time.sleep(0.05)  # Reduced delay for better responsiveness
+#                 continue
+
+#             # Validate frame using OpenCV (optional, but helps with error detection)
+#             if not isinstance(frame, (bytes, bytearray)):
+#                 logging.warning("Invalid frame format, retrying...")
+#                 frame = None
+#                 retry_count += 1
+#                 continue
+
+#             break  # Frame successfully captured
+
+#         except Exception as e:
+#             logging.error(f"Frame capture error: {e}")
+#             retry_count += 1
+#             time.sleep(0.05)
+
+#     if frame is None:
+#         logging.error(f"Failed to capture frame after {max_retries} retries.")
+
+#     return frame
+
 def capture_frame(frame_reader, max_retries:int = 3):
     # Get frame with retry mechanism
     retry_count = 0
@@ -121,6 +163,31 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
     cv2.putText(frame, distance_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     
     return frame
+
+def load_params():
+    """
+    Loads a params.py file via the command line. Allows multiple drones to run on the same script, just with different params files.
+    IMPT: Cannot use Logger yet since not yet initialized! Will be initialized in the params.py file.
+    Example usage: 
+        python -m UnknownArea_v2.main UnknownArea_v2.params2
+
+    :return: params: The module name that needs to be called (e.g. params.NETWORK_CONFIG)
+    """
+    default_params = "UnknownArea_v2.params"       # default params.py
+    if len(sys.argv) < 2:
+        print("Load Params Usage: python script_name.py <params_module>. Trying default params.py.")  
+        params_module = default_params
+    else:
+        params_module = sys.argv[1]
+
+    try:
+        params = importlib.import_module(params_module)
+        print(f"Successfully loaded parameters from {params_module}!")
+        return params
+    except ModuleNotFoundError:
+        logging.info(f"Error: Module {params_module} not found. Exiting script.")
+        sys.exit(1)
+
 
 CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
 logging.debug("Calibration parameters obtained.")

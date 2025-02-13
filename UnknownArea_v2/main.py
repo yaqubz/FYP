@@ -1,6 +1,7 @@
 """
 (IMPT) Run in terminal from main workspace as:
     python -m UnknownArea_v2.main
+    python -m UnknownArea_v2.main UnknownArea_v2.params
 
 TODO 11 Feb: 
 - ToF (and Streaming to some extent - fail to obtain frame) doesn't work well over RPi
@@ -19,9 +20,9 @@ logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler
 
 # IDK TESTING 11 FEB
 # logger = logging.getLogger(__name__)
-logger = logging.getLogger("ABC")
-logger.addHandler(file_handler)
-logger.info("Starting unknown area main...")
+customlogger = logging.getLogger("TestLogger")
+customlogger.addHandler(file_handler)
+customlogger.info("Starting unknown area main...")
 
 from PPFLY2.main import execute_waypoints
 
@@ -38,25 +39,13 @@ from threading import Lock
 import time
 import os
 
-LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
+LAPTOP_ONLY = True # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
 NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 
 if LAPTOP_ONLY:     # just in case
     NO_FLY = True     
 
 EXTRA_HEIGHT = 0   # cm; if victim is higher than ground level (especially if detecting vertical face) 
-
-# Define network configuration constants
-NETWORK_CONFIG = {
-    'host': '192.168.0.111',  # if connected through RPi
-    'control_port': 9011,
-    'state_port': 8011,
-    'video_port': 11111
-    # 'host': '192.168.10.1',     # if connected directly through WiFi
-    # 'control_port': 8889,
-    # 'state_port': 8890,
-    # 'video_port': 11111    
-}
 
 def tof_update_thread(controller, Hz: float = 2):
     """
@@ -103,10 +92,6 @@ def navigation_thread(controller):
             frame = capture_frame(frame_reader)
             logging.debug("Frame captured! After capture_frame.")
             display_frame = frame.copy()    # Create a copy of frame for visualization
-
-            if cv2.waitKey(1) & 0xFF == ord('l'):       # to refer back to log for timestamp when something went wrong
-                logging.debug("Debug Logpoint.")    
-                cv2.putText(display_frame, "DEBUG LOGPOINT SET", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
             
             # Get depth color map
             depth_colormap = controller.generate_color_depth_map(frame) # TBC 6 Feb can shift under "else" since no need to generate when markers found (10 Feb Ans: Not if you want to visualize)
@@ -313,20 +298,24 @@ def navigation_thread(controller):
             cv2.putText(combined_view, "Depth Map", (display_frame.shape[1] + 10, combined_view.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.imshow("Drone Navigation", combined_view)
             
-            # If 'q' is pressed, just continue searching
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                logging.info("Exiting. Drone landing.")
+            # Keyboard shortcuts! (ok 14 Feb)
+            key = cv2.waitKey(1)
+            logging.debug(f"Key Pressed: {key}")
+
+            if key == ord('q'):
                 break
+            elif key == ord('l'):
+                logging.debug("DEBUG LOGPOINT")
                 
         except Exception as e:
             logging.error(f"Error in navigation: {e}. Continuing navigation.")      # 13 Feb: "ERROR - libav.h264 - error while decoding MB 57 29, bytestream -10" does not come here
             # Don't cleanup or break - continue searching
             continue
 
-def main():
+def main():     
     global CAMERA_MATRIX, DIST_COEFF
-
-    controller = DroneController(NETWORK_CONFIG, laptop_only=LAPTOP_ONLY)
+    params = load_params()  # defined in utils.py
+    controller = DroneController(params.NETWORK_CONFIG, laptop_only=LAPTOP_ONLY)
     try:
         logging.info("Taking off...")
         if not NO_FLY:    
@@ -334,7 +323,7 @@ def main():
             controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
-            execute_waypoints("pathtotheunknown_3mforward_turnleft.json", controller.drone, NO_FLY)
+            execute_waypoints(params.WAYPOINTS_JSON, controller.drone, NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
