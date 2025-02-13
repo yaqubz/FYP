@@ -7,4 +7,5 @@ timeout /t 3 /nobreak
 
 start python markerserver/servergui.py
 
-python -m UnknownArea_v2.main
+start python -m UnknownArea_v2.main_copy
+start python -m UnknownArea_v2.main

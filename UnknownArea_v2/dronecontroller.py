@@ -156,6 +156,7 @@ class DroneController:
 
             # Store first valid marker only
             valid_marker_info = {}   # only stores ONE valid marker info
+            lockedon_marker_info = {} # either stores lockedon marker info or None
             danger_marker_info = {}  # Store all danger markers
 
             for i, marker_id in enumerate(detected_ids):
@@ -168,6 +169,16 @@ class DroneController:
                 if marker_id in self.valid_ids and (marker_id not in self.invalid_ids or marker_id == self.markernum_lockedon):
                     if not valid_marker_info:  # Ensures only first valid marker is stored
                         valid_marker_info = {
+                            "id": int(marker_id),  # Ensure ID is a Python int
+                            "position": (x, y, z),
+                            "distance": euclidean_distance,
+                            "corners": corners[i],
+                            "rvecs": rvecs[0],
+                            "tvecs": tvecs[0]
+                        }
+
+                    if marker_id == self.markernum_lockedon:    # Stores marker info of previously locked on ID
+                        lockedon_marker_info = {
                             "id": int(marker_id),  # Ensure ID is a Python int
                             "position": (x, y, z),
                             "distance": euclidean_distance,
@@ -194,6 +205,9 @@ class DroneController:
                     yaw = np.arctan2(R[1, 0], R[0, 0])  # Yaw in radians
                     self.target_yaw = np.degrees(yaw)
                     logging.debug(f"Exit marker yaw: {self.target_yaw:.2f}°")
+
+            if lockedon_marker_info:    # ie. if lockedon_marker is still detected, even if its not the first detection, discard the valid_marker in favour of locked_on marker
+                valid_marker_info = lockedon_marker_info
 
             # Compute distance to the nearest danger marker (if any)
             shortest_danger_distance = float("inf")  

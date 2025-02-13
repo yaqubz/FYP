@@ -3,7 +3,7 @@
     python -m UnknownArea_v2.main
 
 TODO 11 Feb: 
-- ToF doesn't work well over RPi
+- ToF (and Streaming to some extent - fail to obtain frame) doesn't work well over RPi
 
 Takes up 23% of CPU per nav_thread. Running two nav_threads already takes up 100% CPU. (Gab's computer)
 """
@@ -21,7 +21,7 @@ logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler
 # logger = logging.getLogger(__name__)
 logger = logging.getLogger("ABC")
 logger.addHandler(file_handler)
-logger.info("TESTING NEW LOGGER")
+logger.info("Starting unknown area main...")
 
 from PPFLY2.main import execute_waypoints
 
@@ -38,21 +38,24 @@ from threading import Lock
 import time
 import os
 
-LAPTOP_ONLY = True # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY = True     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
+NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+
+if LAPTOP_ONLY:     # just in case
+    NO_FLY = True     
 
 EXTRA_HEIGHT = 0   # cm; if victim is higher than ground level (especially if detecting vertical face) 
 
 # Define network configuration constants
 NETWORK_CONFIG = {
-    # 'host': '192.168.0.103',  # if connected through RPi
-    # 'control_port': 9003,
-    # 'state_port': 8003,
-    # 'video_port': 11103
-    'host': '192.168.10.1',     # if connected directly through WiFi
-    'control_port': 8889,
-    'state_port': 8890,
-    'video_port': 11111    
+    'host': '192.168.0.111',  # if connected through RPi
+    'control_port': 9011,
+    'state_port': 8011,
+    'video_port': 11111
+    # 'host': '192.168.10.1',     # if connected directly through WiFi
+    # 'control_port': 8889,
+    # 'state_port': 8890,
+    # 'video_port': 11111    
 }
 
 def tof_update_thread(controller, Hz: float = 2):
@@ -92,18 +95,25 @@ def navigation_thread(controller):
     approach_complete = False
     centering_complete = False
     centering_threshold = 30    # in px
-    logging.debug(f"Centering Threshold: {centering_threshold}")
     
     while True:  # Main loop continues until marker found or battery low
+                
         try:
+            logging.debug("Capturing frame... Before capture_frame.")
             frame = capture_frame(frame_reader)
+            logging.debug("Frame captured! After capture_frame.")
             display_frame = frame.copy()    # Create a copy of frame for visualization
+
+            if cv2.waitKey(1) & 0xFF == ord('l'):       # to refer back to log for timestamp when something went wrong
+                logging.debug("Debug Logpoint.")    
+                cv2.putText(display_frame, "DEBUG LOGPOINT SET", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
             
             # Get depth color map
             depth_colormap = controller.generate_color_depth_map(frame) # TBC 6 Feb can shift under "else" since no need to generate when markers found (10 Feb Ans: Not if you want to visualize)
             controller.process_depth_color_map(depth_colormap)
             
             # Get ToF distance
+            controller.drone.send_rc_control(0, 0, 0, 0)    # stop before getting Tof reading since it takes 0.5-7 seconds to read ToF
             tof_dist = controller.drone.get_ext_tof()      
             # dist = controller.forward_tof_dist    # if using tof_thread (commented out 3 Feb)
             logging.debug(f"ToF Dist: {tof_dist}")
@@ -122,27 +132,36 @@ def navigation_thread(controller):
                 # Difficult logic, discussed between Yaqub and Gab 11 Feb
                 # Also works without a server, since .is_marker_available will return True
                 if controller.marker_client.is_marker_available(marker_id) or marker_id == controller.markernum_lockedon:
+
                     if controller.markernum_lockedon is None or marker_id == controller.markernum_lockedon: # first time detecting an available marker, or subsequent time detecting a marker locked on by it (but shown as no longer available)
                         controller.markernum_lockedon = marker_id
                         controller.marker_client.send_update(marker_id, detected=True) 
                         logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
+                        controller.drone.send_rc_control(0, 0, 0, 0)
                         goto_approach_sequence = True
                         cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (250, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
 
-                    else:   # detected a valid and available marker, but it's different from the one locked onto previously
+                    elif centering_complete and marker_id != controller.markernum_lockedon:   
+                        # centering complete, but lost detection and detected another valid and available marker
+                        # Do NOT switch lock-on anymore! Go back to the start of the code, and hopefully restore lock-on.
+                        logging.debug(f"Lost locked-on marker during centering. Finding marker again.")
+                        centering_complete = False  # 13 Feb TBC Gab
+                        continue
+                    
+                    else:   # centering incomplete, but lost detection halfway and detected something else. Switch lock-on.
                         logging.debug(f"Switching lock-on from {controller.markernum_lockedon} to {marker_id}...")
                         controller.marker_client.send_update(controller.markernum_lockedon, detected=False) 
                         controller.markernum_lockedon = marker_id   # locking onto the new one
                         controller.marker_client.send_update(controller.markernum_lockedon, detected=True)
                         goto_approach_sequence = False
-                    
+
                 else: # marker detected is NOT available
                     logging.info(f"Valid marker {marker_id} is NOT available (and not already locked-on previously).")
                     goto_approach_sequence = False
                 
                 if goto_approach_sequence is True and not NO_FLY:                  
-                    logging.info(f"Still locked on and approaching marker {controller.markernum_lockedon}...")
+                    logging.info(f"Still locked on and centering/approaching marker {controller.markernum_lockedon}...")
                     
                     # Center on the marker
                     frame_center = frame.shape[1] / 2
@@ -164,7 +183,7 @@ def navigation_thread(controller):
                     elif not approach_complete:
                         current_distance_3D = controller.get_distance()
                         if current_distance_3D is None:
-                            logging.info("Lost marker during approach...")
+                            logging.info("Lost marker during approach...")  # should not reach here! caa 13 Feb
                             time.sleep(0.1)
                             continue
 
@@ -172,25 +191,27 @@ def navigation_thread(controller):
                         current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
                         logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
+                        cv2.putText(display_frame, "Approaching...", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
 
-                        if current_distance_2D >= 300:
-                            step_dist:int = 150
-                            logging.info(f"Distance too large. Stepping forward {step_dist}cm to approach marker...")
+                        if current_distance_2D >= 500:
+                            step_dist:int = 200
+                            logging.info(f"{current_distance_2D}cm distance too large. Stepping forward {step_dist}cm to approach marker...")
                             controller.drone.send_rc_control(0, 0, 0, 0)
                             controller.drone.move_forward(step_dist)
 
-                            time.sleep(1)  # Wait for movement to complete
-                            new_distance = controller.get_distance()
-                            if new_distance is not None:
-                                logging.info(f"New 3D distance to marker: {new_distance:.1f}cm. Recentering...")
-                                centering_complete = False
-                                centering_threshold -= 3    # reduce threshold for better accuracy (TBC 6 Feb)
-                            else:
-                                logging.info("Lost marker during approach step...")
-                                centering_threshold = 30
-                                centering_complete = False
+                            time.sleep(0.5)  # Wait for movement to complete
+                            # new_distance = controller.get_distance()
+                            # if new_distance is not None:
+                            #     logging.info(f"New 3D distance to marker: {new_distance:.1f}cm. Recentering...")
+                            #     centering_complete = False
+                            #     centering_threshold -= 3    # reduce threshold for better accuracy (TBC 6 Feb)
+                            # else:
+                            #     logging.info("Lost marker during approach step...")
+                            #     centering_threshold = 30
+                            #     centering_complete = False
 
                         elif current_distance_2D > 0 and current_distance_2D < 300:
+                            
                             logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
                             controller.drone.move_forward(int(current_distance_2D))
                             logging.info("Approach complete!")
@@ -212,8 +233,8 @@ def navigation_thread(controller):
                 logging.info("No valid markers detected." + exit_text)
                 cv2.putText(display_frame, exit_text, (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 if not NO_FLY and controller.exit_distance_3D < 300:
-                    logging.info(f"Avoiding exit. Turning 180 degrees.")
-                    controller.drone.rotate_clockwise(180)
+                    logging.info(f"Avoiding exit. Turning 45 degrees.")
+                    controller.drone.rotate_clockwise(45)
 
                 elif not NO_FLY:
                     logging.info(f"Exit more than 3m away, no action taken.")
@@ -298,7 +319,7 @@ def navigation_thread(controller):
                 break
                 
         except Exception as e:
-            logging.error(f"Error in navigation: {e}. Continuing navigation.")
+            logging.error(f"Error in navigation: {e}. Continuing navigation.")      # 13 Feb: "ERROR - libav.h264 - error while decoding MB 57 29, bytestream -10" does not come here
             # Don't cleanup or break - continue searching
             continue
 
@@ -313,7 +334,7 @@ def main():
             controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
-            # execute_waypoints("waypoint20x20.json", controller.drone, NO_FLY)
+            execute_waypoints("pathtotheunknown_3mforward_turnleft.json", controller.drone, NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, NO_FLY)
