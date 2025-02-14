@@ -7,10 +7,13 @@ Change Log:
 # 24 Jan: Can stream and work over RPi17; TODO: video stream thread, ToF doesn't work well over RPi
 # 29 Jan: Rework 2D and 3D distance mapping, Calibration
 # 30 Jan: Distance calculation should be quite precise now, no need for hard-coded offsets. Will not work for victims not on the floor (TBC if need)
+
+Run in terminal as:
+    python -m UnknownArea.combine 
 """
 
 from PPFLY2.main import execute_waypoints
-from markerserver.markerserver import MarkerClient
+from markerserver.markerserverclient import MarkerClient
 
 
 import torch
