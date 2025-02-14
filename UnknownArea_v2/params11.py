@@ -1,13 +1,22 @@
 """
-Default params.py file; for Laptop-only simulations!
+This is to fly locally using direct connection to laptop! No RPi.
 """
 
 LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY = True     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 
 PI_ID:int = 11
 
 WAYPOINTS_JSON = "waypoint_fwdtiny.json"
+
+
+
+
+
+
+
+
+### LESS COMMONLY TOUCHED PARAMS ###
 
 LOGGING_CONFIG = {
     'filename': f"log_USA_Pi{PI_ID if PI_ID else ''}.log",
@@ -15,12 +24,6 @@ LOGGING_CONFIG = {
     'format': "%(levelname)s - %(name)s - %(asctime)s - %(message)s",
     'default_logger_name': "DroneController"
 }
-
-
-
-### LESS COMMONLY TOUCHED PARAMS ###
-
-EXTRA_HEIGHT = 0   # cm; if victim is higher than ground level (especially if detecting vertical face) 
 
 def get_network_config(pi_id: int | None = None):
     """

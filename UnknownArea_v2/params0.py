@@ -1,11 +1,11 @@
 """
-This is to fly through RPi.
+This is to fly locally using direct connection to laptop! No RPi.
 """
 
 LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
 NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 
-PI_ID:int = 12
+PI_ID:int = 0
 
 WAYPOINTS_JSON = "waypoint_fwdtiny.json"
 
@@ -35,7 +35,8 @@ def get_network_config(pi_id: int | None = None):
     Returns:
         dict: Network configuration with host and port settings
     """
-    if pi_id is None:
+
+    if pi_id is None or pi_id == 0:
         return {
             'host': '192.168.10.1',     # if connected directly through WiFi
             'control_port': 8889,
