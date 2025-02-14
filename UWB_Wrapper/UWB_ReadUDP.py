@@ -13,7 +13,7 @@ The functions in this code are meant to be imported in other codes
 However, for verification, this code can also be run by itself as main().
 
 This code binds to the port and retrieves the necessary data.
-- Without the .exe file running, can simulate UWB positions being sent via UDP by running the UWB_SendUDP.py script.\
+- Without the .exe file running, can simulate UWB positions being sent via UDP by running the UWB_SendUDP.py script.
 """
 
 import socket
