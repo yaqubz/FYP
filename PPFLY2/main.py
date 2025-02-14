@@ -8,6 +8,7 @@ Typically, drone only rotates and moves forward. It will only do otherwise for e
 CANNOT BE RUN DIRECTLY! Only here to have execute_waypoints imported
 
 Since this is now a module in a package, run using `python -m PPFLY2.main` in the terminal.
+    python -m PPFLY2.main --simulate 1 --filename 'waypoint_30cm.json'
 """
 
 from djitellopy import Tello
@@ -22,7 +23,7 @@ from pathlib import Path
 workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
 
-from UWB_ReadUDP import get_target_position # own custom library
+from UWB_Wrapper.UWB_ReadUDP import get_target_position # own custom library
 
 def check_args():
     """
