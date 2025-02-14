@@ -1,5 +1,6 @@
 """
 (IMPT) Run in terminal from main workspace as:
+
     python -m UnknownArea_v2.main
     python -m UnknownArea_v2.main UnknownArea_v2.params
 
@@ -69,6 +70,7 @@ def navigation_thread(controller):
                 
         try:
             frame = capture_frame(frame_reader)
+            frame = cv2.resize(frame, (640, 480))       # NEW 14 FEB TO REDUCE LATENCY
             display_frame = frame.copy()    # Create a copy of frame for visualization
             
             # Get depth color map

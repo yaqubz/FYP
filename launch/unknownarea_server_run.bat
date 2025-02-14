@@ -11,4 +11,5 @@ start python markerserver/servergui.py
 @REM start python -m UnknownArea_v2.main
 
 start python -m UnknownArea_v2.main UnknownArea_v2.params
-start python -m UnknownArea_v2.main UnknownArea_v2.params11
+@REM start python -m UnknownArea_v2.main UnknownArea_v2.params11
+@REM start python -m UnknownArea_v2.main UnknownArea_v2.params12

@@ -28,6 +28,12 @@ class DroneController:
         midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
         self.transform = midas_transforms.small_transform
 
+        if not laptop_only:
+            # Set video stream properties to reduce latency
+            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)
+            self.drone.set_video_fps(self.drone.FPS_15)
+            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
+
         # Color depth map
         self.depth_map_colors = {}
         

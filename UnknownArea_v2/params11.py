@@ -3,11 +3,11 @@ Default params.py file; for Laptop-only simulations!
 """
 
 LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+NO_FLY = True     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 
 PI_ID:int = 11
 
-WAYPOINTS_JSON = "waypoint_30cm.json"
+WAYPOINTS_JSON = "waypoint_fwdtiny.json"
 
 LOGGING_CONFIG = {
     'filename': f"log_USA_Pi{PI_ID if PI_ID else ''}.log",
@@ -15,6 +15,8 @@ LOGGING_CONFIG = {
     'format': "%(levelname)s - %(name)s - %(asctime)s - %(message)s",
     'default_logger_name': "DroneController"
 }
+
+
 
 ### LESS COMMONLY TOUCHED PARAMS ###
 
@@ -28,6 +30,7 @@ def get_network_config(pi_id: int | None = None):
     Returns:
         dict: Network configuration with host and port settings
     """
+
     if pi_id is None:
         return {
             'host': '192.168.10.1',     # if connected directly through WiFi
@@ -37,7 +40,7 @@ def get_network_config(pi_id: int | None = None):
         }
     else:
         return {
-            'host': f'192.168.0.{pi_id}',
+            'host': f'192.168.0.{pi_id+100}',
             'control_port': 9000 + pi_id,
             'state_port': 8000 + pi_id,
             'video_port': 11100 + pi_id
