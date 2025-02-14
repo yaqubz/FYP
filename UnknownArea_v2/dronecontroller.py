@@ -30,7 +30,7 @@ class DroneController:
 
         if not laptop_only:
             # Set video stream properties to reduce latency
-            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)
+            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to recalibrate if set to 480P
             self.drone.set_video_fps(self.drone.FPS_15)
             self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
 

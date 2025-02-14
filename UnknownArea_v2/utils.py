@@ -8,7 +8,8 @@ from typing import Optional
 
 import importlib, sys
 
-def get_calibration_parameters(TELLO_NO: str = 'D'): # BEST VERSION 30 JAN, V2.2 (to be tested)
+# TODO: move calib params into UnknownArea_v2 folder?
+def get_calibration_parameters(TELLO_NO: str = 'E920EB_480P'): # BEST VERSION 30 JAN, V2.2 (to be tested)
     """
     Retrieves the camera matrix and distortion coefficients for the specified Tello drone.
 
@@ -43,71 +44,6 @@ def get_calibration_parameters(TELLO_NO: str = 'D'): # BEST VERSION 30 JAN, V2.2
 #     ])
 #     dist_coeffs = np.array([0.036099, -0.028374, -0.003189, -0.001275, 0.000000])
 #     return camera_matrix, dist_coeffs
-
-# def get_calibration_parameters(TELLO_NO: str = 'D'):  # TESTING 29 JAN, V2
-#     # Construct file paths
-#     camera_matrix_path = os.path.join("calib_camera", f"camera_matrix_tello{TELLO_NO}.npy")
-#     dist_coeffs_path = os.path.join("calib_camera", f"dist_coeffs_tello{TELLO_NO}.npy")
-
-#     # Ensure files exist before loading
-#     if not os.path.exists(camera_matrix_path) or not os.path.exists(dist_coeffs_path):
-#         raise FileNotFoundError(f"Calibration files for Tello {TELLO_NO} not found.")
-
-#     # Load calibration parameters
-#     camera_matrix = np.load(camera_matrix_path)
-#     dist_coeffs = np.load(dist_coeffs_path)
-    
-#     return camera_matrix, dist_coeffs
-
-# def get_calibration_parameters(calib_data_path = "./Search/calib_data/MultiMatrix.npz"):  # TESTING 29 JAN, V2
-#     calib_data = np.load(calib_data_path)
-#     cam_mat = calib_data["camMatrix"]
-#     dist_coef = calib_data["distCoef"]
-#     r_vectors = calib_data["rVector"]
-#     t_vectors = calib_data["tVector"]
-
-#     return cam_mat, dist_coef
-
-
-# NEW 13 FEB DOESNT WORK - trying to reduce the frame errors
-
-# def capture_frame(frame_reader, max_retries: int = 3):
-#     """
-#     Optimized frame capture function to minimize packet loss and decoding errors.
-#     """
-#     retry_count = 0
-#     frame = None
-
-#     while retry_count < max_retries:
-#         try:
-#             # Get the latest frame
-#             frame = frame_reader.frame
-
-#             # Ensure frame is valid
-#             if frame is None or frame.size == 0:
-#                 logging.warning("Empty or corrupt frame received, retrying...")
-#                 retry_count += 1
-#                 time.sleep(0.05)  # Reduced delay for better responsiveness
-#                 continue
-
-#             # Validate frame using OpenCV (optional, but helps with error detection)
-#             if not isinstance(frame, (bytes, bytearray)):
-#                 logging.warning("Invalid frame format, retrying...")
-#                 frame = None
-#                 retry_count += 1
-#                 continue
-
-#             break  # Frame successfully captured
-
-#         except Exception as e:
-#             logging.error(f"Frame capture error: {e}")
-#             retry_count += 1
-#             time.sleep(0.05)
-
-#     if frame is None:
-#         logging.error(f"Failed to capture frame after {max_retries} retries.")
-
-#     return frame
 
 def capture_frame(frame_reader, max_retries:int = 3):
     # Get frame with retry mechanism
@@ -164,7 +100,6 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
     cv2.putText(frame, distance_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     
     return frame
-
 
 
 def load_params():

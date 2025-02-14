@@ -70,7 +70,7 @@ def navigation_thread(controller):
                 
         try:
             frame = capture_frame(frame_reader)
-            frame = cv2.resize(frame, (640, 480))       # NEW 14 FEB TO REDUCE LATENCY
+            # frame = cv2.resize(frame, (640, 480))       # NEW 14 FEB TO REDUCE LATENCY -- might not be able to do this or else aruco detection is WRONG??? TBC TBC
             display_frame = frame.copy()    # Create a copy of frame for visualization
             
             # Get depth color map
@@ -159,12 +159,14 @@ def navigation_thread(controller):
                         cv2.putText(display_frame, "Approaching...", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
 
                         if current_distance_2D >= 500:
-                            step_dist:int = 200
-                            logging.info(f"{current_distance_2D}cm distance too large. Stepping forward {step_dist}cm to approach marker...")
-                            controller.drone.send_rc_control(0, 0, 0, 0)
+                            step_dist:int = 100
+                            logging.info(f"{current_distance_2D:.2f}cm distance too large. Stepping forward {step_dist}cm to approach marker...")
+                            # controller.drone.send_rc_control(0, 0, 0, 0)
                             controller.drone.move_forward(step_dist)
-
                             time.sleep(0.5)  # Wait for movement to complete
+                            centering_complete = False
+                            continue        # re-enter the loop; need to re-detect marker and re-measure distance. 
+
                             # new_distance = controller.get_distance()
                             # if new_distance is not None:
                             #     logging.info(f"New 3D distance to marker: {new_distance:.1f}cm. Recentering...")
@@ -175,7 +177,7 @@ def navigation_thread(controller):
                             #     centering_threshold = 30
                             #     centering_complete = False
 
-                        elif current_distance_2D > 0 and current_distance_2D < 300:
+                        elif current_distance_2D > 0 and current_distance_2D < 500:
                             
                             logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
                             controller.drone.move_forward(int(current_distance_2D))
@@ -301,7 +303,7 @@ def main():
         logging.info("Taking off...")
         if not params.NO_FLY:    
             controller.drone.takeoff()
-            controller.drone.go_to_height_PID(100)
+            # controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
             execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
