@@ -1,8 +1,16 @@
+"""
+Works well 14 Feb 2025
+This script takes the photos captured by calib0.py, and produces .npy files for camera_matrix and dist_coeff
+
+Script Params:
+    - TELLO_NO:str
+"""
+
 import cv2
 import numpy as np
 import glob
 
-TELLO_NO: str = 'D' # IMPT: Change this according to which drone is being calibrated (TBC if significant difference)
+TELLO_NO: str = 'E920EB_480P' # IMPT: Change this according to which drone is being calibrated (TBC if significant difference)
 
 # Define checkerboard parameters
 CHECKERBOARD = (7, 10)  # Number of inner corners (one less than the number of squares)
@@ -17,8 +25,9 @@ objp *= SQUARE_SIZE  # Scale to real-world square size
 objpoints = []  # 3D points
 imgpoints = []  # 2D points
 
-# Load images
-images = glob.glob("calib_camera\calibration_images\*.jpg")  # Update with your image folder
+# Load images in the directory, if they contain the string == TELLO_NO
+images = [img for img in glob.glob("calib_camera/calibration_images/*.jpg") if TELLO_NO in img]
+
 print(f"Found {len(images)} images")
 
 for fname in images:

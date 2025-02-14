@@ -1,3 +1,12 @@
+"""
+Works well 14 Feb 2025
+This script allows the user to connect to the Tello camera and take pictures with the SPACE key.
+
+Script Params:
+    - TELLO_NO:str : For filenaming and ease of finding correct pictures for calib1.py to use
+    - tello.set_video_resolution: (IMPT) Any changes in video resolution will require a change in calibration params!
+"""
+
 import cv2
 import os
 from djitellopy import Tello
@@ -15,6 +24,11 @@ print("Battery:", tello.get_battery(), "%")
 
 # Start video stream
 tello.streamon()
+
+# IF NEEDED
+tello.set_video_resolution(tello.RESOLUTION_480P)     # IMPT: Default 720P - need to recalibrate if set to 480P
+tello.set_video_fps(tello.FPS_15)
+tello.set_video_bitrate(tello.BITRATE_3MBPS)
 
 # OpenCV window setup
 cv2.namedWindow("Tello Stream", cv2.WINDOW_NORMAL)
