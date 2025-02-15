@@ -76,7 +76,7 @@ class UWBVisualization:
 
         try:
             with open(filename, 'r') as f:
-                self.loaded_marked_pos = json.load(f)
+                self.loaded_marked_pos = json.load(f)["points"]
             print("[INFO] Marked positions loaded successfully.")
         except FileNotFoundError:
             print("[INFO] No saved marked positions found.")
