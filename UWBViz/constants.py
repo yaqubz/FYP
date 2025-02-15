@@ -9,7 +9,7 @@ FONT_SIZE = 30
 INITIAL_SCALE = 40
 MAX_HISTORY = 50
 TRACE_FADE_TIME = 10
-RECT_WIDTH, RECT_HEIGHT = 6, 6
+RECT_WIDTH, RECT_HEIGHT = 20, 20        # IMPT: Scale in metres
 
 # Colors
 BACKGROUND_COLOR = (255, 255, 255)  # White
@@ -21,7 +21,9 @@ RED = (255, 0, 0)
 # Resources
 RESOURCES_DIR = "resources"
 BGPIC = os.path.join(RESOURCES_DIR, "field2025_toscale.PNG")
-JSON_READ = "waypoint20x20.json"
+WAYPOINTS_JSON_DEFAULT = "waypoint20x20.json"
+
+MARKEDPOINTS_JSON_DEFAULT = "UWBViz/uwb_trace.json"
 
 # Tag colors for different UWB tags
 TAG_COLORS = [

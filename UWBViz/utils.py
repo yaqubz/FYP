@@ -2,6 +2,9 @@ import pygame
 import json
 import time
 from .constants import *
+from typing import List, Dict, Any
+import tkinter as tk
+from tkinter import simpledialog
 
 class Background:
     def __init__(self, image_path):
@@ -36,12 +39,15 @@ class CoordinateSystem:
         y = (SCREEN_HEIGHT // 2 - screen_y + self.offset_y) / self.scale_factor
         return x, y
 
-def load_waypoints(json_filename):
+def load_waypoints():
     """
     Only loads all the waypoints if the LAST waypoint is provided (i.e. distance,angle = 0,0)
     """
-    filename = input("Enter JSON filename to load (without .json extension): ")
-    filename = json_filename if filename == "" else f"{filename}.json"
+    user_input = simpledialog.askstring("Load Waypoints", 
+                                        f"Enter JSON filename to load (without .json extension) \nDefault: {WAYPOINTS_JSON_DEFAULT}")
+        
+    filename = WAYPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
+    
     try:
         with open(filename, 'r') as f:
             data = json.load(f)
@@ -145,24 +151,121 @@ class Visualization:
                 self.screen.blit(label, (screen_x + 10, screen_y - 10))
 
     def draw_marked_positions(self, marked_positions):
+        """Draw walls, victims, dangers, and pillars on the screen."""
+        
+        walls = []
+        current_wall_start = None
+
+        # Process walls from wall_start to wall_end
+        for point in marked_positions["points"]:
+            if point["type"] == "wall_start":
+                current_wall_start = (point["x"], point["y"])
+            elif point["type"] == "wall_end" and current_wall_start:
+                walls.append((current_wall_start, (point["x"], point["y"])))
+                current_wall_start = None  # Reset for the next segment
+
+        # Draw walls as thick black lines
+        for wall in walls:
+            start_x, start_y = self.coord_system.screen_coordinates(wall[0][0], wall[0][1])
+            end_x, end_y = self.coord_system.screen_coordinates(wall[1][0], wall[1][1])
+            pygame.draw.line(self.screen, (100, 100, 200), (start_x, start_y), (end_x, end_y), 5)
+
         # Draw victims as green triangles
-        for victim in marked_positions['victims']:
-            screen_x, screen_y = self.coord_system.screen_coordinates(victim['x'], victim['y'])
+        for victim in (p for p in marked_positions["points"] if p["type"] == "victim"):
+            screen_x, screen_y = self.coord_system.screen_coordinates(victim["x"], victim["y"])
             pygame.draw.polygon(self.screen, (0, 255, 0), [
                 (screen_x, screen_y - 10),
                 (screen_x - 10, screen_y + 10),
                 (screen_x + 10, screen_y + 10)
             ])
-        
-        # Draw dangers as red circles
-        for danger in marked_positions['dangers']:
-            screen_x, screen_y = self.coord_system.screen_coordinates(danger['x'], danger['y'])
-            pygame.draw.circle(self.screen, (255, 0, 0), (screen_x, screen_y), 10, 2)
-        
+
+        # Draw dangers as red triangles
+        for danger in (p for p in marked_positions["points"] if p["type"] == "danger"):
+            screen_x, screen_y = self.coord_system.screen_coordinates(danger["x"], danger["y"])
+            pygame.draw.polygon(self.screen, (255, 0, 0), [
+                (screen_x, screen_y - 10),
+                (screen_x - 10, screen_y + 10),
+                (screen_x + 10, screen_y + 10)
+            ])
+
         # Draw pillars as black circles
-        for pillar in marked_positions['pillars']:
-            screen_x, screen_y = self.coord_system.screen_coordinates(pillar['x'], pillar['y'])
+        for pillar in (p for p in marked_positions["points"] if p["type"] == "pillar"):
+            screen_x, screen_y = self.coord_system.screen_coordinates(pillar["x"], pillar["y"])
             pygame.draw.circle(self.screen, (0, 0, 0), (screen_x, screen_y), 10, 2)
+
+class RecordingManager:
+    def __init__(self):
+        self.recording:bool = False
+        self.recording_wall:bool = False
+        self.recorded_points: List[Dict[str, Any]] = [] # Ordered list of points. Each point is a dictionary with {x: y: z: etc.}
+        self.current_wall_id:int = 0  # To identify different walls
+        
+    def start_recording(self):
+        """Start a new recording session"""
+        self.recording:bool = True
+        self.recorded_points = []
+        print("[INFO] Ready to record. Hotkeys: W-Walls (toggle on/off) | P-Pillars | V-Victims")
+        
+    def stop_recording(self):
+        """Stop recording and save data"""
+        self.recording = False
+        self.recording_wall = False
+        
+        if self.recorded_points:
+            # filename = f"uwb_trace_{timestamp}.json"
+            filename = f"UWBViz/uwb_trace.json"
+            
+            with open(filename, 'w') as f:
+                json.dump({
+                    'points': self.recorded_points,
+                    'metadata': {
+                        'total_points': len(self.recorded_points),
+                        'total_wall_segments': self.current_wall_id,
+                        'total_pillars': "TODO 15 FEB",
+                        'total_victims': "TODO 15 FEB",
+                        'total_danger': "TODO 15 FEB"
+                    }
+                }, f, indent=4)
+            print(f"[INFO] Recording saved to {filename}")
+            
+        # self.recorded_points = []
+        
+    def toggle_wall(self, x, y, z):
+        """Toggle wall recording state and mark start/end points"""
+        if self.recording:
+            self.recording_wall = not self.recording_wall
+            if self.recording_wall:
+                # Start of a new wall
+                self.current_wall_id += 1
+                self.add_point(x, y, z, point_type='wall_start', wall_id=self.current_wall_id)
+                print(f"[INFO] Wall {self.current_wall_id} recording started...")
+            else:
+                # End of current wall
+                self.add_point(x, y, z, point_type='wall_end', wall_id=self.current_wall_id)
+                print(f"[INFO] Wall {self.current_wall_id} recording ended")
+
+        else:
+            print("[WARNING] Recording not enabled. Press R to enable.")
+            
+    def add_point(self, x:float, y:float, z:float, point_type:str = ('pillar', 'wall', 'wall_start', 'wall_end', 'victim', 'danger'), wall_id=None):
+        """Add a point to the recording with its type."""
+        x, y, z = round(x,2), round(y,2), round(z,2)
+        if self.recording:
+            point = {
+                'x': x,
+                'y': y,
+                'z': z,
+                'type': point_type
+            }
+            if point_type == 'wall' and wall_id is not None:
+                point['wall_id'] = wall_id
+            self.recorded_points.append(point)
+
+            print(f"[INFO] {point_type.capitalize()} recorded at {x},{y}")
+        else:
+            print("[WARNING] Recording not enabled. Press R to enable.")
+            
+        
 
 def distance(point1, point2):
     """Calculate Euclidean distance between two points"""
