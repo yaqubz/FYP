@@ -2,17 +2,20 @@
 Import Hierarchy: constants -> config -> utils -> main
 EVERYTHING HERE CAN BE ADJUSTED!
 """
+BGPIC = "resources/field2025_toscale.PNG"
 
 # Scaling Coeffs
-# ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space
-ACTUAL_HEIGHT, ACTUAL_WIDTH = 600, 600  # cm of actual space
+ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space
+# ACTUAL_HEIGHT, ACTUAL_WIDTH = 600, 600  # cm of actual space
 WIDTH_HEIGHT_RATIO = ACTUAL_WIDTH/ACTUAL_HEIGHT
 
-SCREEN_HEIGHT = 800     # pixels on screen
+SCREEN_HEIGHT = 700     # pixels on screen
 SCREEN_WIDTH = int(SCREEN_HEIGHT*WIDTH_HEIGHT_RATIO)
 
 MAP_SIZE_COEFF = ACTUAL_WIDTH / SCREEN_WIDTH  # cm per pixel; ASSUMES 1:1 ratio
 print(f"cm per px = {MAP_SIZE_COEFF}")
+
+WAYPOINTS_JSON_DEFAULT = "waypoint20x20.json"
 
 INITIAL_HEADING = 180       # can adjust
 

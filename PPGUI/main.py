@@ -7,6 +7,11 @@ from constants import *
 from config import *
 from utils import *
 
+import tkinter as tk
+from tkinter import simpledialog
+
+from typing import List, Tuple
+
 """
 UAV Lab Test Area: 7m x 6m (700cm x 600cm)
 Nanyang Audi Test Area: 2000cm x 2000cm,
@@ -15,16 +20,23 @@ Original image: 708px x 708px
 Import Hierarchy: (Ensure imports follow a unidirectional structure. Constants should flow downstream to avoid circular dependencies.)
     config --> constants --> utils --> main
 
+IMPT: To toggle saving last waypoint - see "save_json" function!
+
+TODO:
+- Resizeable
+- Load new markers json (uwb_trace.json)
+
 """
 
-
-BGPIC = "resources/field2025_toscale.PNG"
-SAVE_FILENAME = "waypoint20x20"
-
 pygame.init()
+# screen = pygame.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT], pygame.RESIZABLE)
 screen = pygame.display.set_mode([SCREEN_WIDTH, SCREEN_HEIGHT])
 screen.fill(WHITE)
 pygame.display.set_caption("Drone Path Planner (Test Area)")
+
+root = tk.Tk()  # Create a Tkinter root window
+root.withdraw()  # Hide the main Tkinter window
+user_input = ""  # Store the user's input
 
 def find_intermediate_waypoints(start, end, interval_cm=50):     # includes both start and end points
     """
@@ -101,13 +113,13 @@ def draw_text_overlay():
     
     # Draw info texts
     text_surface = font.render(f"Test Area: {ACTUAL_WIDTH/100}m x {ACTUAL_HEIGHT/100}m", True, BLUE)
-    screen.blit(text_surface, (10, ACTUAL_HEIGHT-50))
+    screen.blit(text_surface, (10, SCREEN_HEIGHT-50))
     
     text_info = font.render("S: save and close. | O: orthogonal mode. | I: intermediate mode", True, BLUE)
-    screen.blit(text_info, (10, ACTUAL_HEIGHT-35))
+    screen.blit(text_info, (10, SCREEN_HEIGHT-35))
 
     text_info = font.render("CCW is +ve. Assumes drone starts heading 180.", True, BLUE)
-    screen.blit(text_info, (10, ACTUAL_HEIGHT-20))
+    screen.blit(text_info, (10, SCREEN_HEIGHT-20))
 
 def load_json_waypoints(filename):
     """
@@ -369,9 +381,9 @@ def screen_setup(screen):
 
 screen_setup(screen)
 
-path_wp = []        
+path_wp: List[Tuple[float, float]] = []
 """Stores waypoints as pixel coordinates; (0,0) is top left of screen"""
-path_wp_cm = []     
+path_wp_cm: List[Tuple[float, float]] = []
 """Stores waypoints as cm coordinates; (0,0) is bottom left of screen"""
 
 action_index = 0
@@ -421,9 +433,12 @@ while running:
 
             elif event.key == pygame.K_s:
                 running = False
-                save_json(path_wp, SAVE_FILENAME)
-                print(f"Exited. Saved as {SAVE_FILENAME}.json.")
-                print_json_waypoints(SAVE_FILENAME)
+                user_input = simpledialog.askstring("Save Waypoints", 
+                                                        f"Enter JSON filename to save (without .json extension) \nDefault: {WAYPOINTS_JSON_DEFAULT}")
+                filename = WAYPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
+                save_json(path_wp, filename)
+                print(f"Exited. Saved as {filename}.json.")
+                print_json_waypoints(filename)
 
             elif event.key == 27:   # esc key
                 running = False
@@ -461,11 +476,29 @@ while running:
 
             elif event.key == pygame.K_l:  # 'L' key to load JSON waypoints
                 # Prompt for filename (using Pygame's built-in input is tricky, so we'll use input())
-                filename = input("Enter JSON filename to load (without .json extension): ")
+                
+                user_input = simpledialog.askstring("Load Waypoints", 
+                                                        f"Enter JSON filename to load (without .json extension) \nDefault: {WAYPOINTS_JSON_DEFAULT}")
+                filename = WAYPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
                 load_json_waypoints(filename)
 
-            elif event.key == pygame.K_m:  # 'M' key to load markers
+            elif event.key == pygame.K_m:  # 'M' key to load markers    # NEEDS WORK 15 FEB
                 load_marked_positions()
+
+        # if event.type == pygame.VIDEORESIZE:  # Handle window resize events
+        #     SCREEN_WIDTH = event.w  # Update width and height
+        #     SCREEN_HEIGHT = event.h
+        #     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.RESIZABLE)  # Recreate the screen surface
+        #     # Important: Redraw everything after resizing, as the surface is new.
+        #     screen_setup(screen)
+
+        #     # Iterate through waypoints and convert back to pixel coordinates
+        #     for waypoint in path_wp:
+        #         x_px = int(waypoint[0] / MAP_SIZE_COEFF)
+        #         y_px = int(SCREEN_HEIGHT - waypoint[1] / MAP_SIZE_COEFF)
+                
+        #         # Process each waypoint
+        #         process_waypoint_input((x_px, y_px))
     
     # Display the current mouse position at the top left
     current_pos = pygame.mouse.get_pos()
@@ -481,16 +514,16 @@ while running:
                 current_pos = (current_pos[0], last_wp[1])  # Constrain to X-axis
             else:
                 current_pos = (last_wp[0], current_pos[1])  # Constrain to Y-axis
-        
-        # Display the current mouse position at the top left
-        pygame.draw.rect(screen, (0, 0, 0), (0, 0, 100, 30))
-        font = pygame.font.Font(None, 24)
-        text = font.render(f"({round(current_pos[0]*MAP_SIZE_COEFF)}, {round(ACTUAL_HEIGHT-current_pos[1]*MAP_SIZE_COEFF)})", True, (255, 255, 255))
-        screen.blit(text, (10, 10))
 
         pygame.draw.line(screen, ORANGE, path_wp[-1], current_pos, 2)
         last_pos = current_pos
         label_distance(path_wp, current_pos)
+
+    # Display the current mouse position at the top left
+    pygame.draw.rect(screen, (0, 0, 0), (0, 0, 100, 30))
+    font = pygame.font.Font(None, 24)
+    text = font.render(f"({round(current_pos[0]*MAP_SIZE_COEFF)}, {round(ACTUAL_HEIGHT-current_pos[1]*MAP_SIZE_COEFF)})", True, (255, 255, 255))
+    screen.blit(text, (10, 10))    
     processing_input = False
     pygame.display.update()
 
