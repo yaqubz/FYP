@@ -1,3 +1,11 @@
+"""
+15 FEB - okay but does not fulfil a need right now
+Further development - can take in a lot of points, then form straight-line vectors? 
+For now, 
+            SHELVED; NOT USED CAA 15 FEB
+
+"""
+
 import json
 import math
 
@@ -43,7 +51,7 @@ def extract_obstacles(points, min_distance=0.3):
     
     return obstacles
 
-def process_uwb_json(input_file="UWBViz/uwb_trace.json", output_file="UWBViz/filtered_map.json"):
+def process_uwb_json(input_file="UWBViz/uwb_trace.json", output_file="UWBViz/uwb_filtered_map.json"):
     """Process UWB trace data, extract walls and obstacles, and save the filtered map."""
     data = load_json(input_file)
     
