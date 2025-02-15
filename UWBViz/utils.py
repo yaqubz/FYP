@@ -150,14 +150,14 @@ class Visualization:
                 label = font.render(f"#{int(tag_id)} ({x:.1f}, {y:.1f})", True, color)
                 self.screen.blit(label, (screen_x + 10, screen_y - 10))
 
-    def draw_marked_positions(self, marked_positions):
+    def draw_marked_positions(self, marked_positions:List[Dict[str, Any]]):
         """Draw walls, victims, dangers, and pillars on the screen."""
         
         walls = []
         current_wall_start = None
 
         # Process walls from wall_start to wall_end
-        for point in marked_positions["points"]:
+        for point in marked_positions:
             if point["type"] == "wall_start":
                 current_wall_start = (point["x"], point["y"])
             elif point["type"] == "wall_end" and current_wall_start:
@@ -171,7 +171,7 @@ class Visualization:
             pygame.draw.line(self.screen, (100, 100, 200), (start_x, start_y), (end_x, end_y), 5)
 
         # Draw victims as green triangles
-        for victim in (p for p in marked_positions["points"] if p["type"] == "victim"):
+        for victim in (p for p in marked_positions if p["type"] == "victim"):
             screen_x, screen_y = self.coord_system.screen_coordinates(victim["x"], victim["y"])
             pygame.draw.polygon(self.screen, (0, 255, 0), [
                 (screen_x, screen_y - 10),
@@ -180,7 +180,7 @@ class Visualization:
             ])
 
         # Draw dangers as red triangles
-        for danger in (p for p in marked_positions["points"] if p["type"] == "danger"):
+        for danger in (p for p in marked_positions if p["type"] == "danger"):
             screen_x, screen_y = self.coord_system.screen_coordinates(danger["x"], danger["y"])
             pygame.draw.polygon(self.screen, (255, 0, 0), [
                 (screen_x, screen_y - 10),
@@ -189,7 +189,7 @@ class Visualization:
             ])
 
         # Draw pillars as black circles
-        for pillar in (p for p in marked_positions["points"] if p["type"] == "pillar"):
+        for pillar in (p for p in marked_positions if p["type"] == "pillar"):
             screen_x, screen_y = self.coord_system.screen_coordinates(pillar["x"], pillar["y"])
             pygame.draw.circle(self.screen, (0, 0, 0), (screen_x, screen_y), 10, 2)
 
@@ -207,23 +207,43 @@ class RecordingManager:
         print("[INFO] Ready to record. Hotkeys: W-Walls (toggle on/off) | P-Pillars | V-Victims")
         
     def stop_recording(self):
-        """Stop recording and save data"""
+        """
+        Stop recording and save data. Data must be recorded and saved in one setting! Cannot load json and add more data.
+        Can manually combine json for separate recordings.
+        
+        """
         self.recording = False
         self.recording_wall = False
         
         if self.recorded_points:
-            # filename = f"uwb_trace_{timestamp}.json"
-            filename = f"UWBViz/uwb_trace.json"
+            user_input = simpledialog.askstring("Save Marked Positions", 
+                                        f"Enter JSON filename to save (without .json extension) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
+        
+            filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
             
+    # Count pillars, victims, and danger points *before* creating the JSON
+            total_pillars = 0
+            total_victims = 0
+            total_danger = 0
+
+            for point in self.recorded_points:  # Assuming self.recorded_points is your list of points
+                point_type = point.get("type")  # Use .get() to avoid KeyError if "type" is missing
+                if point_type == "pillar":  # Adjust the type names as needed
+                    total_pillars += 1
+                elif point_type == "victim":
+                    total_victims += 1
+                elif point_type == "danger":
+                    total_danger += 1
+
             with open(filename, 'w') as f:
                 json.dump({
                     'points': self.recorded_points,
-                    'metadata': {
+                    'metadata': {   # for user reference only! not used elsewhere
                         'total_points': len(self.recorded_points),
                         'total_wall_segments': self.current_wall_id,
-                        'total_pillars': "TODO 15 FEB",
-                        'total_victims': "TODO 15 FEB",
-                        'total_danger': "TODO 15 FEB"
+                        'total_pillars': total_pillars,
+                        'total_victims': total_victims,
+                        'total_danger': total_danger
                     }
                 }, f, indent=4)
             print(f"[INFO] Recording saved to {filename}")
