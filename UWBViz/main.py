@@ -9,10 +9,12 @@ from queue import Queue
 import copy
 from pathlib import Path
 
-from constants import *
-from utils import *
+from .constants import *
+from .utils import *
 
 """
+python -m UWBViz.main
+
 GUI to display live position of all UWB tags in the arena. 
 
 This code requires:
@@ -30,7 +32,7 @@ Run UWB_SendUDP.py to simulate some drones' locations being broadcast via UDP
 # Add workspace root to sys.path (9 Jan: Works but might need a better solution)
 workspace_root = Path(__file__).resolve().parent.parent
 sys.path.append(str(workspace_root))
-from UWB_ReadUDP import get_all_positions
+from UWB_Wrapper.UWB_ReadUDP import get_all_positions
 
 class UWBVisualization:
     def __init__(self):

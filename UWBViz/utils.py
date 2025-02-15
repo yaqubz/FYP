@@ -1,7 +1,7 @@
 import pygame
 import json
 import time
-from constants import *
+from .constants import *
 
 class Background:
     def __init__(self, image_path):
