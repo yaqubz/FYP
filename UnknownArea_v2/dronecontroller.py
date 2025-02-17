@@ -5,7 +5,7 @@ import numpy as np
 from threading import Lock
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
-from .customtello import CustomTello, MockTello
+from shared_utils.customtello import CustomTello, MockTello
 from .utils import *
 from markerserver.markerserverclient import MarkerClient
 

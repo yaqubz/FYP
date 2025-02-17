@@ -1,16 +1,18 @@
 """
-This is to fly locally using direct connection to laptop! No RPi.
+Default params.py file; for Laptop-only simulations!
+
+This file serves as the primary template for other paramsX.py files.
+
+Please ensure all changes to subsequent CHILD paramsX.py are reflected here! Updates need not be reflected in the other direction
 """
 
-LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+LAPTOP_ONLY = True   # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
+NO_FLY = True        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 
-PI_ID:int = 11
+PI_ID:int = None
+UWBTAG_ID:int = 1
 
-WAYPOINTS_JSON = "waypoint_fwdtiny.json"
-
-
-
+WAYPOINTS_JSON = "waypoint_30cm.json"
 
 
 
@@ -25,6 +27,8 @@ LOGGING_CONFIG = {
     'default_logger_name': "DroneController"
 }
 
+EXTRA_HEIGHT = 0   # cm; if victim is higher than ground level (especially if detecting vertical face) 
+
 def get_network_config(pi_id: int | None = None):
     """
     Returns network configuration based on pi_id.
@@ -33,8 +37,7 @@ def get_network_config(pi_id: int | None = None):
     Returns:
         dict: Network configuration with host and port settings
     """
-
-    if pi_id is None:
+    if pi_id is None or pi_id == 0:
         return {
             'host': '192.168.10.1',     # if connected directly through WiFi
             'control_port': 8889,
@@ -43,7 +46,7 @@ def get_network_config(pi_id: int | None = None):
         }
     else:
         return {
-            'host': f'192.168.0.{pi_id+100}',
+            'host': f'192.168.0.{pi_id}',
             'control_port': 9000 + pi_id,
             'state_port': 8000 + pi_id,
             'video_port': 11100 + pi_id

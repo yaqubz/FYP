@@ -9,7 +9,7 @@ import time, math
 import logging
 from simple_pid import PID
 from .UWB_ReadUDP import get_target_position
-from UnknownArea_v2.customtello import CustomTello, MockTello
+from shared_utils.customtello import CustomTello, MockTello
 
 file_handler = logging.FileHandler("log_pid.log", mode='w')  # Log to a file (overwrite each run)
 console_handler = logging.StreamHandler()  # Log to the terminal

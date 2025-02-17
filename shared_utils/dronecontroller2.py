@@ -1,36 +1,41 @@
 import torch
 import cv2
+import time
 from cv2 import aruco
 import numpy as np
 from threading import Lock
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
 from .customtello import CustomTello, MockTello
-from .utils import *
+# from UnknownArea_v2.utils import *
 from markerserver.swarmserverclient import MarkerClient
 
 """
-17 Feb Testing - V2 for Simultaneous takeoff
+17 Feb LATEST Testing - V2 for Simultaneous takeoff and integrating ALL controllers
 """
 
 class DroneController:
-    def __init__(self, network_config, drone_id, laptop_only = False):
+    """
+    No takeoff / flying / landing commands takes place here. (caa 17 Feb)
+    """
+    def __init__(self, network_config, drone_id, laptop_only = False, load_midas = True):
         # Initialize Tello
         self.drone = MockTello() if laptop_only else CustomTello(network_config)
         self.drone.connect()
         logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
         self.drone.streamon()
         
-        # Initialize MiDaS model
-        self.model_type = "MiDaS_small"
-        self.midas = torch.hub.load("intel-isl/MiDaS", self.model_type)
-        self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-        self.midas.to(self.device)
-        self.midas.eval()
-        
-        # Load MiDaS transform
-        midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
-        self.transform = midas_transforms.small_transform
+        if load_midas:
+            # Initialize MiDaS model
+            self.model_type = "MiDaS_small"
+            self.midas = torch.hub.load("intel-isl/MiDaS", self.model_type)
+            self.device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+            self.midas.to(self.device)
+            self.midas.eval()
+            
+            # Load MiDaS transform
+            midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
+            self.transform = midas_transforms.small_transform
 
         if not laptop_only:
             # Set video stream properties to reduce latency

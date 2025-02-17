@@ -1,9 +1,9 @@
-# 7 Feb Works - run as 'python -m markerserver.server'
+# 17 Feb - swarmserver = markerserver_v2
 # Need to forcefully close terminal
 # must run server BEFORE running clients
 
 """
-python -m markerserver.server
+python -m markerserver.swarmserver
 """
 
 import logging

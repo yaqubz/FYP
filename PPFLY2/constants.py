@@ -1,10 +1,6 @@
 # Adjust Params Here
-LAND_ID = 3 # set to 0 for no land
-SIMULATE = True # set to True to initiate MockTello() class (i.e. no fly); 16 Jan - default overwritten by argparse
 START_HEADING = 0
 INCREMENT_CM = 300      # IMPT: maximum go_xyz distance is 500cm; should be set to a value no more than 500
-INPUT_JSON = 'waypoint20x20.json'
-UWBTAG_ID = 1
 
 # Do not touch Params
 waypoints = []      # to store executed waypoints and drone's current position

@@ -5,10 +5,9 @@
 """
 Typically, drone only rotates and moves forward. It will only do otherwise for error correction using UWB.
 
-CANNOT BE RUN DIRECTLY! Only here to have execute_waypoints imported
-
 Since this is now a module in a package, run using `python -m PPFLY2.main` in the terminal.
     python -m PPFLY2.main --simulate 1 --filename 'waypoint_30cm.json'
+    python -m PPFLY2.main shared_params.params
 """
 
 from djitellopy import Tello
@@ -18,6 +17,9 @@ from .constants import *
 
 import json, math, time, sys, argparse
 from pathlib import Path
+
+from shared_utils.customtello import MockTello
+from shared_utils.shared_utils import *
 
 # Add workspace root to sys.path (9 Jan: Works but might need a better solution)
 workspace_root = Path(__file__).resolve().parent.parent
@@ -38,8 +40,9 @@ def check_args():
 def execute_waypoints(json_filename, drone, simulate = False):
     """
     Connect, takeoff and landing should be done outside this function.
+    TODO 18 Feb: Move to shared_utils
     """
-    global LAND_ID, waypoints
+    global waypoints
     global start_batt, end_batt
     tello = MockTello() if simulate else drone
     DELAY = 0 if simulate else 2
@@ -58,7 +61,7 @@ def execute_waypoints(json_filename, drone, simulate = False):
 
         # At StartPos, Take and record first UWB Measurement. IMPT: For now, these 3 are always done together.
         save_pos(waypoints, orientations, abs_position, orientation, 0)
-        lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(UWBTAG_ID)]
+        lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(params.UWBTAG_ID)]
         save_pos_UWB(waypoints_UWB, orientations_UWB, lastpos_cm[0:2])
         save_errors(pos_error_list, orientations_error_list, waypoints[-1], waypoints_UWB[-1], orientation, obtain_orientation(waypoints_UWB))
         print(f"WAYPOINTS UWB: {waypoints_UWB}")
@@ -84,12 +87,10 @@ def execute_waypoints(json_filename, drone, simulate = False):
                 # Update position and record data after rotation
                 save_pos(waypoints, orientations, abs_position, orientation, 0)
 
-                lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(UWBTAG_ID)]
+                lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(params.UWBTAG_ID)]
                 save_pos_UWB(waypoints_UWB, orientations_UWB, lastpos_cm[0:2])
                 save_errors(pos_error_list, orientations_error_list, waypoints[-1], waypoints_UWB[-1], orientation, obtain_orientation(waypoints_UWB))
                 printdistance(waypoints_UWB[-2], waypoints_UWB[-1])
-
-                check_mission_pad_id(tello, LAND_ID)
 
             # Handle forward movement in increments
             distance = wp['dist_cm']
@@ -99,12 +100,10 @@ def execute_waypoints(json_filename, drone, simulate = False):
                     tello.move_forward(50)
                     save_pos(waypoints, orientations, abs_position, orientation, 50)
 
-                    lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(UWBTAG_ID)]
+                    lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(params.UWBTAG_ID)]
                     save_pos_UWB(waypoints_UWB, orientations_UWB, lastpos_cm[0:2])
                     save_errors(pos_error_list, orientations_error_list, waypoints[-1], waypoints_UWB[-1], orientation, obtain_orientation(waypoints_UWB))
                     printdistance(waypoints_UWB[-2], waypoints_UWB[-1])   
-
-                    check_mission_pad_id(tello, LAND_ID)
                     distance -= 50
                     time.sleep(DELAY)
 
@@ -113,12 +112,10 @@ def execute_waypoints(json_filename, drone, simulate = False):
                     tello.move_forward(INCREMENT_CM)
                     save_pos(waypoints, orientations, abs_position, orientation, INCREMENT_CM)
 
-                    lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(UWBTAG_ID)]
+                    lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(params.UWBTAG_ID)]
                     save_pos_UWB(waypoints_UWB, orientations_UWB, lastpos_cm[0:2])
                     save_errors(pos_error_list, orientations_error_list, waypoints[-1], waypoints_UWB[-1], orientation, obtain_orientation(waypoints_UWB))
                     printdistance(waypoints_UWB[-2], waypoints_UWB[-1])
-
-                    check_mission_pad_id(tello, LAND_ID)
                     distance -= INCREMENT_CM
                     time.sleep(DELAY)
                 
@@ -128,12 +125,10 @@ def execute_waypoints(json_filename, drone, simulate = False):
                 tello.move_forward(distance)
                 save_pos(waypoints, orientations, abs_position, orientation, distance)
 
-                lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(UWBTAG_ID)]
+                lastpos_cm = [int(round(coord*100,0)) for coord in get_target_position(params.UWBTAG_ID)]
                 save_pos_UWB(waypoints_UWB, orientations_UWB, lastpos_cm[0:2])
                 save_errors(pos_error_list, orientations_error_list, waypoints[-1], waypoints_UWB[-1], orientation, obtain_orientation(waypoints_UWB))
                 printdistance(waypoints_UWB[-2], waypoints_UWB[-1])
-
-                check_mission_pad_id(tello, LAND_ID)
                 time.sleep(DELAY)
 
             else:   # for distance = 0
@@ -159,14 +154,16 @@ def execute_waypoints(json_filename, drone, simulate = False):
 
 if __name__ == "__main__":
 
-    # Check if -sim and -f flags are set via CLI - optional
-    args = check_args()
-    if args.simulate is not None:
-        SIMULATE = bool(args.simulate)  # Convert 0/1 to False/True
-        print(f"[INFO] SIMULATE set to {SIMULATE}")
-    if args.filename is not None:
-        INPUT_JSON = args.filename  # Set filename
-        print(f"[INFO] INPUT_JSON set to {args.filename}")
+    # # Check if -sim and -f flags are set via CLI - optional
+    # args = check_args()
+    # if args.simulate is not None:
+    #     SIMULATE = bool(args.simulate)  # Convert 0/1 to False/True
+    #     print(f"[INFO] SIMULATE set to {SIMULATE}")
+    # if args.filename is not None:
+    #     INPUT_JSON = args.filename  # Set filename
+    #     print(f"[INFO] INPUT_JSON set to {args.filename}")
+
+    params = load_params()
 
     """
     IMPT: Use cases:
@@ -174,9 +171,9 @@ if __name__ == "__main__":
     2. main() can also be called directly by main_run_sequence.bat
     """
 
-    tello = MockTello() if SIMULATE else Tello()
-    TAKEOFF_DELAY = 0 if SIMULATE else 3 
-    DELAY = 0 if SIMULATE else 2
+    tello = MockTello() if params.NO_FLY else Tello()
+    TAKEOFF_DELAY = 0 if params.NO_FLY else 3 
+    DELAY = 0 if params.NO_FLY else 2
 
     tello.connect()
     start_batt = tello.get_battery()
@@ -188,10 +185,10 @@ if __name__ == "__main__":
     tello.takeoff()
     time.sleep(TAKEOFF_DELAY)  # Give more time for takeoff to stabilize
 
-    if validate_waypoints(INPUT_JSON):
-        print(f"Waypoints validated. Starting execution in {'simulation' if SIMULATE else 'real'} mode...")
+    if validate_waypoints(params.WAYPOINTS_JSON):
+        print(f"Waypoints validated. Starting execution in {'simulation' if params.NO_FLY else 'real'} mode...")
         time.sleep(2)
-        execute_waypoints(INPUT_JSON, tello, SIMULATE)
+        execute_waypoints(params.WAYPOINTS_JSON, tello, params.NO_FLY)
         print(f"Landing Now. End Battery: {tello.get_battery()}%")
         tello.end()
     else:

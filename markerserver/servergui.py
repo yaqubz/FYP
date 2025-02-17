@@ -1,3 +1,8 @@
+"""
+Run directly in terminal to open GUI for markerserver/swarmserver.
+Operates as a client that receives updates.
+"""
+
 import tkinter as tk
 from tkinter import ttk
 from markerserverclient import MarkerClient

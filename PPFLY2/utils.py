@@ -1,42 +1,6 @@
 import json, math, time
 from .constants import *
 
-class MockTello:
-    def connect(self):
-        print("Mock: Drone connected.")
-    
-    def get_battery(self):
-        print("Mock: Battery at 100%")
-        return 100
-    
-    def set_mission_pad_detection_direction(self, direction):
-        print(f"Mock: Set mission pad detection direction to {direction}")
-    
-    def takeoff(self):
-        print("Mock: Taking off...")
-    
-    def rotate_clockwise(self, angle):
-        print(f"Mock: Rotating clockwise {angle} degrees")
-    
-    def rotate_counter_clockwise(self, angle):
-        print(f"Mock: Rotating counter-clockwise {angle} degrees")
-    
-    def move_forward(self, distance):
-        print(f"Mock: Moving forward {distance} cm")
-
-    def get_mission_pad_id(self):
-        return -1   # no pad found
-    
-    @property
-    def is_flying(self):
-        return True
-    
-    def land(self):
-        print("Mock: Landing...")
-
-    def end(self):
-        print("Mock: Landing and Ending...")
-
 def validate_waypoints(json_filename):
     with open(json_filename, 'r') as f:
         data = json.load(f)

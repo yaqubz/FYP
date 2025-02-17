@@ -13,7 +13,8 @@ import logging  # in decreasing log level: debug > info > warning > error > crit
 
 from PPFLY2.main import execute_waypoints
 
-from .dronecontroller2 import DroneController
+from shared_utils.dronecontroller2 import DroneController
+from shared_utils.shared_utils import *
 from .utils import *
 
 import torch
