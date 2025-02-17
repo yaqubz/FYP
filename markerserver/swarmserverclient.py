@@ -1,10 +1,9 @@
-# 17 Feb Works Well! 
-# Can run directly to launch server. Import Client class into DroneController scripts and GUI respectively.
-# TBC Why: For proper logging, use server.py instead
+# 17 Feb TESTED VIRTUAL, UNTESTED IRL - V2 of MarkerServerClient, with simultaneous takeoff
+# TODO (once stable - refactor Marker* to Swarm*)
 
 import threading, socket, json, time
 import logging
-from typing import Dict, Set, Any
+from typing import Dict, Set, Any, List
 
 class MarkerServer:
     def __init__(self, host='0.0.0.0', port=5005, timeout=5):
@@ -12,6 +11,8 @@ class MarkerServer:
         self.port = port
         self.timeout = timeout
         self.marker_status: Dict[str, Dict[str, Any]] = {}
+        self.drone_status: Dict[str, Dict[str, Any]] = {} # Tracks which drones are ready and their waiting list
+        self.takeoff_waitlist = set()
         self.clients: Set[tuple] = set()
         self.lock = threading.Lock()
         self.last_updates: Dict[str, float] = {}  # Track last update time for each marker
@@ -27,7 +28,7 @@ class MarkerServer:
         self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
-        logging.info(f"Marker server started on {self.host}:{self.port}")
+        logging.info(f"Swarm server started on {self.host}:{self.port}")
 
     def check_timeouts(self):
         """Check for markers that haven't been updated and clear their detected status"""
@@ -51,7 +52,8 @@ class MarkerServer:
                 time.sleep(1)  # Check every second
             except Exception as e:
                 logging.error(f"Error in check_timeouts: {e}")
-                time.sleep(1)
+                # time.sleep(1)
+                raise
 
     def update_marker_status(self, message):
         """Update marker status and timestamp"""
@@ -80,6 +82,50 @@ class MarkerServer:
             except Exception as e:
                 logging.error(f"Error updating marker status: {e}")
 
+    def update_drone_status(self, message):
+        """
+        Updates the drone's readiness status.
+        """
+        
+        drone_id = message["drone_id"]
+        if drone_id not in self.drone_status:
+            self.drone_status[drone_id] = {"ready": False}
+
+        if "ready" in message:
+            self.drone_status[drone_id]["ready"] = message["ready"]
+            logging.debug(f"{drone_id} ready")
+
+        if message["type"] == "takeoff_request":
+            logging.debug(f"{drone_id} requesting takeoff. Message: {message}")
+            drone_id = message["drone_id"]
+            waiting_list = message["waiting_list"]
+            self.register_ready_drone(drone_id, waiting_list)
+
+        logging.info(f"Drone Statuses: {self.drone_status}")
+
+    def register_ready_drone(self, drone_id, waiting_list:List):
+        """
+        Registers a drone as ready and checks if all required drones are also ready.
+        """
+        with self.lock:
+            self.drone_status[drone_id] = {
+                "ready": True,
+                "waiting_list": waiting_list
+            }
+            all_waiting_drones = set(waiting_list) | {drone_id}
+
+            logging.debug(f"all_waiting_drones: {all_waiting_drones}")
+
+            # Check if we are the first drone to be ready in this group
+            if not (set(waiting_list) & self.takeoff_waitlist):  # No intersection
+                logging.info(f"Drone {drone_id} is first ready, starting countdown for {all_waiting_drones}")
+                threading.Thread(target=self.wait_and_takeoff, args=(all_waiting_drones,)).start()
+            else:
+                logging.info(f"Drone {drone_id} is ready, but waiting for others.")
+
+            self.takeoff_waitlist.update(all_waiting_drones)
+            logging.debug(f"Current Waitlist: {self.takeoff_waitlist}")
+    
     def handle_messages(self):
         while True:
             try:
@@ -95,9 +141,14 @@ class MarkerServer:
                                 self.clients.add(addr)
                                 logging.info(f"New client connected: {addr}")
                             self.broadcast_status_to_one(addr)
-                    else:
+                    elif message.get("type") == 'takeoff_request':  # Drone Status Update (TODO 17 FEB for other conditions)
+                        self.update_drone_status(message)
+                    elif message.get("marker_id", False):  # Marker Detection Update
                         self.update_marker_status(message)
-                        self.broadcast_status()
+                    else:
+                        logging.debug("Should not reach here. See handle_messages in swarmserverclient")
+                    
+                    self.broadcast_status()
                         
                 except json.JSONDecodeError:
                     logging.warning(f"Received invalid JSON from {addr}: {data}")
@@ -107,9 +158,8 @@ class MarkerServer:
 
     def broadcast_status_to_one(self, addr):
         try:
-            with self.lock:
-                status_json = json.dumps(self.marker_status).encode()
-                self.broadcast_sock.sendto(status_json, addr)
+            status_json = json.dumps(self.marker_status).encode()
+            self.broadcast_sock.sendto(status_json, addr)
         except Exception as e:
             logging.error(f"Error broadcasting to {addr}: {e}")
 
@@ -133,6 +183,8 @@ class MarkerServer:
         except Exception as e:
             logging.error(f"Error in broadcast_status: {e}")
 
+
+
     def run(self):
         try:
             threads = [
@@ -148,6 +200,47 @@ class MarkerServer:
         except Exception as e:
             logging.error(f"Error in server run: {e}")
 
+    def wait_and_takeoff(self, all_waiting_drones, timeout=10):
+        """
+        NEW FXN 17 FEB
+        Waits for all drones in the waiting list to be ready before sending a takeoff signal.
+        """
+        start_time = time.time()
+        while time.time() - start_time < timeout:
+            status_copy = self.drone_status.copy()
+            ready_drones = [d for d in all_waiting_drones if status_copy.get(d, {}).get("ready", False)]
+            if set(ready_drones) == set(all_waiting_drones):
+                logging.debug("All drones ready for takeoff!")
+                self.send_takeoff_signal(ready_drones)
+                break
+            time.sleep(0.5)
+            logging.debug("Still waiting...")
+
+        if len(ready_drones) / len(all_waiting_drones) > 0.5:
+            logging.warning(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Sending only these drones: {ready_drones}")
+            self.send_takeoff_signal(ready_drones)
+        else:
+            logging.error(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Takeoff aborted.")
+
+        
+    
+    def send_takeoff_signal(self, ready_drones:List):
+        """
+        Sends takeoff signal to all ready drones.
+        """
+        if not ready_drones:
+            logging.warning("No drones were ready for takeoff.")
+            return
+
+        takeoff_message = json.dumps({"type": "takeoff", "takeoff_list": ready_drones}).encode()
+        with self.lock:
+            for client_addr in self.clients:
+                try:
+                    self.broadcast_sock.sendto(takeoff_message, client_addr)
+                except Exception as e:
+                    logging.warning(f"Failed to send to client {client_addr}: {e}")
+
+
 
 class MarkerClient:
     def __init__(self, drone_id=0, server_port=5005, broadcast_ip="255.255.255.255"):
@@ -157,6 +250,8 @@ class MarkerClient:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Enable broadcast
         self.sock.bind(("0.0.0.0", 0))  # Bind to any available port
+        self.ready = False
+        self.takeoff_signal = False
         
         self.marker_status = {}         # Keeps a local copy of marker_status, to be updated by the server through the receive_updates thread
         threading.Thread(target=self.receive_updates, daemon=True).start()
@@ -164,6 +259,36 @@ class MarkerClient:
         self.send_update(-1)  # Send an initial message to register with the server
         logging.info(f"Marker client {drone_id} broadcasting on {self.broadcast_ip}:{self.server_port}")
 
+    # def send_ready_signal(self):
+    #     """
+    #     TBC IF NEEDED
+    #     Notify the server that this drone is ready for takeoff.
+    #     This method is called in by the DroneController in takeoff_simul
+    #     """
+    #     self.ready = True
+    #     message = json.dumps({"drone_id": self.drone_id, "ready": True}).encode()
+    #     self.sock.sendto(message, (self.broadcast_ip, self.server_port))
+    #     logging.info(f"Sent ready signal for Drone ID {self.drone_id}")
+
+
+    def send_takeoff_request(self, waiting_list:list):
+        """
+        Notifies the server that this drone is ready for takeoff and is waiting for the specified drones.
+        """
+        message = {
+            "type": "takeoff_request",
+            "drone_id": self.drone_id,
+            "waiting_list": waiting_list,
+            "ready": True
+        }
+        message_json = json.dumps(message).encode()
+
+        for _ in range(5):  # Send the message 5 times for reliability
+            self.sock.sendto(message_json, (self.broadcast_ip, self.server_port))
+            time.sleep(0.03)  # Small delay to prevent flooding
+
+        logging.info(f"Drone {self.drone_id} is ready and waiting for {waiting_list} to takeoff together.")
+    
     def send_update(self, marker_id: int, detected=None, landed=None):
         if marker_id is not None:
             message = {"marker_id": marker_id}
@@ -184,7 +309,15 @@ class MarkerClient:
         while True:
             try:
                 data, _ = self.sock.recvfrom(1024)
-                self.marker_status = json.loads(data.decode())
+                message = json.loads(data.decode())
+
+                if message.get("type") == "takeoff" and self.drone_id in message.get("takeoff_list"):
+                    logging.info(f"Received takeoff signal for Tello {self.drone_id}")
+                    self.takeoff_signal = True  # Set flag for DroneController            
+
+                else:
+                    self.marker_status = message
+                
                 logging.debug(f"Received marker status from server: {self.marker_status}")
             except socket.timeout:  # Handle timeouts (if a timeout is set)
                 pass
@@ -209,6 +342,6 @@ if __name__ == "__main__":      # Usually should not run directly?
     formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
-    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
     server = MarkerServer()
     server.run()

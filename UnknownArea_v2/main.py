@@ -13,7 +13,7 @@ import logging  # in decreasing log level: debug > info > warning > error > crit
 
 from PPFLY2.main import execute_waypoints
 
-from .dronecontroller import DroneController
+from .dronecontroller2 import DroneController
 from .utils import *
 
 import torch
@@ -298,11 +298,12 @@ def main():
     # Setup logging
     logger = setup_logging(params, "UnknownSearchArea")
     logger.info("Starting unknown area main...")
-    controller = DroneController(params.NETWORK_CONFIG, laptop_only=params.LAPTOP_ONLY)
+    controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY)
     try:
-        logging.info("Taking off...")
         if not params.NO_FLY:    
-            controller.drone.takeoff()
+            # controller.drone.takeoff()
+            controller.takeoff_simul([11,12,13,14])
+            logging.info("Taking off for real...")
             # controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
