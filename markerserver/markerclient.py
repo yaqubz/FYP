@@ -3,7 +3,7 @@
 from markerserverclient import MarkerClient
 import time
 
-marker_client = MarkerClient()
+marker_client = MarkerClient(drone_id=1)
 
 while True:
     marker_client.send_update(1, detected=True)

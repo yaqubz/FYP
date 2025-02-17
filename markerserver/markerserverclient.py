@@ -149,7 +149,8 @@ class MarkerServer:
 
 
 class MarkerClient:
-    def __init__(self, server_port=5005, broadcast_ip="255.255.255.255"):
+    def __init__(self, drone_id=0, server_port=5005, broadcast_ip="255.255.255.255"):
+        self.drone_id = drone_id
         self.server_port = server_port
         self.broadcast_ip = broadcast_ip
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -160,12 +161,12 @@ class MarkerClient:
         threading.Thread(target=self.receive_updates, daemon=True).start()
 
         self.send_update(-1)  # Send an initial message to register with the server
-        logging.info(f"Marker client broadcasting on {self.broadcast_ip}:{self.server_port}")
-        print(f"Marker client broadcasting on {self.broadcast_ip}:{self.server_port}")
+        logging.info(f"Marker client {drone_id} broadcasting on {self.broadcast_ip}:{self.server_port}")
 
     def send_update(self, marker_id: int, detected=None, landed=None):
         if marker_id is not None:
             message = {"marker_id": marker_id}
+            message["drone_id"] = self.drone_id
             if detected is not None:
                 message["detected"] = detected
             if landed is not None:
