@@ -87,7 +87,7 @@ class UWBVisualization:
         while True:
             self.data_event.wait()  # Block if the event is cleared (paused)
             
-            if self.mouse_simulation:
+            if self.mouse_simulation:       # IMPT: This blocks all other real UWB readings!
                 # Create DataFrame from mouse position
                 mouse_x, mouse_y = pygame.mouse.get_pos()
                 uwb_x, uwb_y = self.coord_system.uwb_coordinates(mouse_x, mouse_y)
@@ -170,6 +170,7 @@ class UWBVisualization:
     def handle_keypress(self, key):
 
         current_pos = None
+        # IMPT: Takes current_pos (for recording) as the (1) last tag ID OR (2) simulated mouse movements
         if self.mouse_simulation:
             mouse_x, mouse_y = pygame.mouse.get_pos()
             uwb_x, uwb_y = self.coord_system.uwb_coordinates(mouse_x, mouse_y)
@@ -203,11 +204,6 @@ class UWBVisualization:
         # NEW 15 FEB - FOR WALL RECORDING
 
         elif key == pygame.K_r:  # Toggle recording
-
-            self.mouse_simulation = True
-            print("[INFO] Mouse simulation enabled")
-            self.last_cmdline = "[INFO] Mouse simulation enabled"
-
             if not self.recording_manager.recording:
                 self.recording_manager.start_recording()
             else:
