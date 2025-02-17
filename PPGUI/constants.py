@@ -16,6 +16,7 @@ MAP_SIZE_COEFF = ACTUAL_WIDTH / SCREEN_WIDTH  # cm per pixel; ASSUMES 1:1 ratio
 print(f"cm per px = {MAP_SIZE_COEFF}")
 
 WAYPOINTS_JSON_DEFAULT = "waypoint20x20"
+MARKEDPOINTS_JSON_DEFAULT = "UWBViz/uwb_trace"
 
 INITIAL_HEADING = 180       # can adjust
 

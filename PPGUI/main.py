@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import simpledialog
 
 from typing import List, Tuple
+import datetime
 
 """
 UAV Lab Test Area: 7m x 6m (700cm x 600cm)
@@ -21,6 +22,9 @@ Import Hierarchy: (Ensure imports follow a unidirectional structure. Constants s
     config --> constants --> utils --> main
 
 IMPT: To toggle saving last waypoint - see "save_json" function!
+
+pygame origin: top left
+uwb origin: bottom left
 
 TODO:
 - Resizeable
@@ -165,56 +169,62 @@ def load_json_waypoints(filename):
         return None
 
 
-def load_marked_positions(filename='marked_positions.json'):
+def load_marked_positions(filename='UWBViz/uwb_trace'):
     """
-    Load marked positions from JSON file and draw them on screen.
+    Load marked positions of obstacles and walls etc. from JSON file and draw them on screen.
     
     Args:
         filename (str): Name of the JSON file to load
     """
-    global path_wp, path_wp_cm, action_index
     
     try:
-        with open(filename, 'r') as f:
-            data = json.load(f)
-        
-        # # Reset existing waypoints if needed
-        # path_wp = []
-        # path_wp_cm = []
-        # action_index = 0
-        
-        # screen_setup(screen)  # Refresh the screen
-
-        # Draw markers
-        print(data)
-        for marker_type, markers in data.items():
-            for marker in markers:
-                x_cm = marker['x']*100
-                y_cm = marker['y']*100
-                
-                # Convert cm to pixel coordinates
-                x_px = int(x_cm / MAP_SIZE_COEFF)
-                y_px = int(SCREEN_HEIGHT - y_cm / MAP_SIZE_COEFF)
-                
-                # Draw marker based on type
-                if marker_type == 'victims':
-                    pygame.draw.polygon(screen, (0, 255, 0), [
-                        (x_px, y_px - 10),
-                        (x_px - 10, y_px + 10),
-                        (x_px + 10, y_px + 10)
-                    ])
-                elif marker_type == 'dangers':
-                    pygame.draw.circle(screen, (255, 0, 0), (x_px, y_px), 10, 2)
-                elif marker_type == 'pillars':
-                    pygame.draw.circle(screen, (0, 0, 0), (x_px, y_px), 10, 2)
-        
-        # pygame.display.update()
-        print(f"Successfully loaded markers from {filename}")
-        return data
-    
+        with open(f"{filename}.json", 'r') as f:
+            marked_positions = json.load(f)["points"] 
+        print("[INFO] Marked positions loaded successfully.")
     except FileNotFoundError:
-        print(f"Error: File {filename} not found.")
-        return None
+        print("[INFO] No saved marked positions found.")
+    except Exception as e:
+        print(f"[ERROR] Could not load marked positions: {e}")
+
+    walls = []
+    current_wall_start = None
+
+    # Process walls from wall_start to wall_end
+    for point in marked_positions:
+        if point["type"] == "wall_start":
+            current_wall_start = (point["x"], point["y"])
+        elif point["type"] == "wall_end" and current_wall_start:
+            walls.append((current_wall_start, (point["x"], point["y"])))
+            current_wall_start = None  # Reset for the next segment
+
+    # Draw walls as thick black lines
+    for wall in walls:
+        start_x, start_y = wall[0][0]*100, wall[0][1]*100
+        end_x, end_y = wall[1][0]*100, wall[1][1]*100
+        pygame.draw.line(screen, (100, 100, 200), (start_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - start_y/MAP_SIZE_COEFF), (end_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - end_y/MAP_SIZE_COEFF), 5)
+
+    # Draw victims as green triangles
+    for victim in (p for p in marked_positions if p["type"] == "victim"):
+        screen_x, screen_y = victim["x"]*100, victim["y"]*100
+        pygame.draw.polygon(screen, (0, 255, 0), [
+            (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF - 10),
+            (screen_x/MAP_SIZE_COEFF - 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10),
+            (screen_x/MAP_SIZE_COEFF + 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10)
+        ])
+
+    # Draw dangers as red triangles
+    for danger in (p for p in marked_positions if p["type"] == "danger"):
+        screen_x, screen_y = danger["x"]*100, danger["y"]*100
+        pygame.draw.polygon(screen, (255, 0, 0), [
+            (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF - 10),
+            (screen_x/MAP_SIZE_COEFF - 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10),
+            (screen_x/MAP_SIZE_COEFF + 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10)
+        ])
+
+    # Draw pillars as black circles
+    for pillar in (p for p in marked_positions if p["type"] == "pillar"):
+        screen_x, screen_y = pillar["x"]*100, pillar["y"]*100
+        pygame.draw.circle(screen, (0, 0, 0), (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF), 10, 2)
 
 def process_waypoint_input(pos):
 
@@ -326,11 +336,11 @@ def save_json(path_wp, json_name):     # Computes and saves final waypoints into
                 print(f"{index} yaw angle = {round(angle,0)}")    # TODO 30/10 Check whether can fly with decimal yaw commands
                 path_angle.append(round(angle,0))
 
-            # else: # NEW 7 JAN - final waypoint with remaining distance = 0, angle = 0 (IMPT: ENABLE OR DISABLE THIS AS NEEDED. Alternatively, just delete the last waypoint in the json.)
-            #       # TBC 23 Jan : is this really needed for UWB localization?
-            #     path_dist_cm.append(0)
-            #     path_dist_px.append(0)
-            #     path_angle.append(0)
+            else: # NEW 7 JAN - final waypoint with remaining distance = 0, angle = 0 (IMPT: ENABLE OR DISABLE THIS AS NEEDED. Alternatively, just delete the last waypoint in the json.)
+                  # TBC 23 Jan : is this really needed for UWB localization?
+                path_dist_cm.append(0)
+                path_dist_px.append(0)
+                path_angle.append(0)
 
         # Create waypoints data
         waypoints = []
@@ -348,6 +358,10 @@ def save_json(path_wp, json_name):     # Computes and saves final waypoints into
                 }
             })
 
+
+        now = datetime.datetime.now()
+        formatted_datetime = now.strftime("%d %m %H:%M")
+
         # Save to JSON file
         with open(f'{json_name}.json', 'w+') as f:
             json.dump({
@@ -357,10 +371,11 @@ def save_json(path_wp, json_name):     # Computes and saves final waypoints into
                     "width_cm": ACTUAL_WIDTH,
                     "height_cm": ACTUAL_HEIGHT,
                     "scale_factor": MAP_SIZE_COEFF},
-                "competition_notice": "This path was planned in a test area. Scale adjustments needed for 20m x 20m competition field."
+                "competition_notice": "This path was planned in a test area. Scale adjustments needed for 20m x 20m competition field.",
+                "datetime": formatted_datetime
             }, f, indent=4)
         print(f"json saved as {json_name}.json")
-        print("\n------------------\npath_wp:", path_wp, "\npath_wp_cm:",path_wp_cm,"\n------------------")
+        print("\n------------------\npath_wp:", path_wp, "\npath_wp_cm:",path_wp_cm,"\n------------------") 
 
     else:
         print("No waypoints saved.")
@@ -475,15 +490,17 @@ while running:
                         # print(f"i is {i}, pathwp is{path_wp_temp}, currentpos is {path_wp_temp[i]}")
 
             elif event.key == pygame.K_l:  # 'L' key to load JSON waypoints
-                # Prompt for filename (using Pygame's built-in input is tricky, so we'll use input())
-                
                 user_input = simpledialog.askstring("Load Waypoints", 
                                                         f"Enter JSON filename to load (without .json extension) \nDefault: {WAYPOINTS_JSON_DEFAULT}")
-                filename = WAYPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
+                filename = WAYPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}"
                 load_json_waypoints(filename)
 
             elif event.key == pygame.K_m:  # 'M' key to load markers    # NEEDS WORK 15 FEB
-                load_marked_positions()
+                user_input = simpledialog.askstring("Load Waypoints", 
+                                                        f"Enter JSON filename to load (without .json extension) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
+                filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}"
+                print(filename)
+                load_marked_positions(filename)
 
         # if event.type == pygame.VIDEORESIZE:  # Handle window resize events
         #     SCREEN_WIDTH = event.w  # Update width and height
