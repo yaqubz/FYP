@@ -1,4 +1,9 @@
-from combine import DroneController # works 6 Feb but need to copy to main directory to run (TBC why) 
+"""
+Works 18 Feb
+python -m Test_Archive.TEST_pidheight
+""" 
+
+from shared_utils.dronecontroller2 import DroneController 
 import time
 
 
@@ -10,12 +15,12 @@ NETWORK_CONFIG = {
     'video_port': 11111
 }
 
-controller = DroneController(NETWORK_CONFIG)
+controller = DroneController(NETWORK_CONFIG, drone_id=1, load_midas=False)
 controller.drone.takeoff()
 print(f"Start Height: {controller.drone.get_height()}, Downward ToF: {controller.drone.get_distance_tof()}")
 controller.drone.go_to_height_PID(140)
 time.sleep(2)
-controller.drone.go_to_height_PID(130)
+controller.drone.go_to_height_PID(60)
 time.sleep(2)
 
 print(f"End Height: {controller.drone.get_height()}, Downward ToF: {controller.drone.get_distance_tof()}")
