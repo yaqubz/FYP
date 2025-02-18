@@ -2,6 +2,7 @@ import importlib, sys, logging, os
 import numpy as np
 from typing import Optional
 
+
 def load_params():
     """
     Loads a params.py file via the command line. Allows multiple drones to run on the same script.
@@ -21,6 +22,7 @@ def load_params():
     try:
         params = importlib.import_module(params_module)
         print(f"Successfully loaded parameters from {params_module}!")
+        print(f"Params are: {params}")      # For curiosity 18 Feb
         return params
     except ModuleNotFoundError:
         print(f"Error: Module {params_module} not found. Exiting script.")
@@ -91,6 +93,16 @@ def get_calibration_parameters(TELLO_NO: str = 'E920EB_480P'): # BEST VERSION 30
     
     return camera_matrix, dist_coeffs
 
+def normalize_angle(angle: float) -> float:
+    """
+    Normalizes an angle to the range [-180, 180). Useful for calculating Tello turn angle (e.g. for PID).
+    """
+    angle = angle % 360  # Ensure the angle is within [0, 360)
+    if angle > 180:
+        angle -= 360  # Shift down to [-180, 180)
+    return angle
 
+# Ensures variables are accessible by all scripts
+params = load_params()
 CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
 print("Calibration parameters obtained from shared_utils")

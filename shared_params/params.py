@@ -12,8 +12,8 @@ NO_FLY = True        # indicate NO_FLY = True to connect to the drone, but ensur
 PI_ID:int = None
 UWBTAG_ID:int = 1
 
-WAYPOINTS_JSON = "waypoint_30cm.json"
-
+# WAYPOINTS_JSON = "waypoint_30cm.json"
+WAYPOINTS_JSON = "waypoint_big.json"
 
 
 

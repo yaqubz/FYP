@@ -3,7 +3,9 @@ import cv2
 import time
 from cv2 import aruco
 import numpy as np
+import math
 from threading import Lock
+from typing import List, Dict
 import logging  # in decreasing log level: debug > info > warning > error > critical
 
 from .customtello import CustomTello, MockTello
@@ -20,10 +22,12 @@ class DroneController:
     """
     def __init__(self, network_config, drone_id, laptop_only = False, load_midas = True):
         # Initialize Tello
+        logging.debug(f"Laptop only (bool): {laptop_only}")
         self.drone = MockTello() if laptop_only else CustomTello(network_config)
         self.drone.connect()
         logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
         self.drone.streamon()
+        self.video_handler = None
         
         if load_midas:
             # Initialize MiDaS model
@@ -39,7 +43,7 @@ class DroneController:
 
         if not laptop_only:
             # Set video stream properties to reduce latency
-            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to recalibrate if set to 480P
+            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
             self.drone.set_video_fps(self.drone.FPS_15)
             self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
 
@@ -71,11 +75,43 @@ class DroneController:
         self.forward_tof_dist = None # to be updated by subthread
         self.forward_tof_lock = Lock()
 
-        self.target_yaw = None
+        # 18 FEB NEW Searcher Navigation Parameters
+        self.waypoints_executed:List[Dict] = []
+        self.my_current_pos:tuple = (0,0)       # Dead reckoning
+        self.my_current_orientation:float = 0   # Dead reckoning
+        self.my_imu_orientation = 0             
+        self.my_start_pos:tuple = (0,0)     # CAN BE A PARAM
+        self.status:str = None              # should be a property??
+        
+        self.target_yaw = None      # TESTING END-JAN - for exit marker
 
         # Swarm Server/Client (17 Feb new)
         self.marker_client = MarkerClient(drone_id = drone_id)
 
+
+    # 18 FEB NEW VIDEO HANDLING
+
+    def set_video_handler(self, video_handler):
+        """Set the video handler reference"""
+        self.video_handler = video_handler
+
+    def get_current_frame(self):
+        """Get the latest frame from video handler"""
+        if self.video_handler:
+            return self.video_handler.get_current_frame()
+        return None
+
+    def get_display_frame(self):
+        """Get the display frame from video handler"""
+        if self.video_handler:
+            return self.video_handler.get_display_frame()
+        return None
+    
+    def return_display_frame(self, frame):
+        """Returns annotated frame to video handler"""
+        if self.video_handler:
+            self.video_handler.return_display_frame(frame)
+    
     def takeoff_simul(self, drones_list:list):
         """
         Waits for a takeoff signal before taking off.
@@ -146,6 +182,35 @@ class DroneController:
     def get_tof_distance(self):
         with self.forward_tof_lock:
             return self.forward_tof_dist
+        
+    def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
+        """
+        :args:
+        rotation_deg: input given in as GUI json (i.e. +ve ccw) 
+
+        (Dead reckoning) Update the drone's position and store it in the waypoints_executed list.
+        Also stores the distance travelled / degrees rotated in the previous command.
+        Assumes drone rotates and only travels forward in straight lines.
+            Drone's rotation is +ve in the clockwise direction (i.e. turning right)
+            GUI's rotation (and by extension, waypoints.json) is +ve in the anticlockwise direction (i.e. turning left)
+        
+        """
+        rad = math.radians(rotation_deg)
+        new_x = self.my_current_pos[0] + int(distance_cm * math.sin(rad))
+        new_y = self.my_current_pos[1] + int(distance_cm * math.cos(rad))
+
+        self.my_current_pos = (round(new_x,2), round(new_y,2))
+        self.my_current_orientation -= rotation_deg
+        self.my_imu_orientation = self.drone.get_yaw()
+
+        if self.my_current_orientation > 180:
+            self.my_current_orientation -= 360
+        elif self.my_current_orientation < -180:
+            self.my_current_orientation += 360
+
+        self.waypoints_executed.append({"x_cm": self.my_current_pos[0], "y_cm": self.my_current_pos[1], 
+                                        "orientation_deg": self.my_current_orientation, "imu_orientation_deg": self.my_imu_orientation,
+                                        "distance_cm": distance_cm, "rotation_deg": rotation_deg})
 
     def detect_markers(self, frame, display_frame, marker_size=14.0):
         """
