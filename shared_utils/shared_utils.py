@@ -1,4 +1,5 @@
-import importlib, sys, logging
+import importlib, sys, logging, os
+import numpy as np
 from typing import Optional
 
 def load_params():
@@ -61,3 +62,35 @@ def setup_logging(params: object, logger_name: Optional[str] = None) -> logging.
     logger.addHandler(file_handler)
     
     return logger
+
+# TODO: move calib params into UnknownArea_v2 folder?
+def get_calibration_parameters(TELLO_NO: str = 'E920EB_480P'): # BEST VERSION 30 JAN, V2.2 (to be tested)
+    """
+    Retrieves the camera matrix and distortion coefficients for the specified Tello drone.
+
+    Args:
+        TELLO_NO (str): Identifier for the Tello drone (e.g., 'D').
+
+    Returns:
+        tuple: Camera matrix and distortion coefficients.
+
+    Raises:
+        FileNotFoundError: If the calibration files for the specified Tello drone are not found.
+    """
+    # Construct file paths
+    camera_matrix_path = os.path.join("calib_camera", f"camera_matrix_tello{TELLO_NO}.npy")
+    dist_coeffs_path = os.path.join("calib_camera", f"dist_coeffs_tello{TELLO_NO}.npy")
+
+    # Ensure files exist before loading
+    if not os.path.exists(camera_matrix_path) or not os.path.exists(dist_coeffs_path):
+        raise FileNotFoundError(f"Calibration files for Tello {TELLO_NO} not found.")
+
+    # Load calibration parameters
+    camera_matrix = np.load(camera_matrix_path)
+    dist_coeffs = np.load(dist_coeffs_path)
+    
+    return camera_matrix, dist_coeffs
+
+
+CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
+print("Calibration parameters obtained from shared_utils")

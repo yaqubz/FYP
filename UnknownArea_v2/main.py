@@ -294,7 +294,7 @@ def navigation_thread(controller):
             continue
 
 def main():     
-    global CAMERA_MATRIX, DIST_COEFF
+    global DIST_COEFF
    
     # Setup logging
     logger = setup_logging(params, "UnknownSearchArea")
@@ -303,7 +303,7 @@ def main():
     try:
         if not params.NO_FLY:    
             # controller.drone.takeoff()
-            controller.takeoff_simul([11,12,13,14])
+            controller.takeoff_simul([11,12,13])
             logging.info("Taking off for real...")
             # controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)

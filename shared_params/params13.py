@@ -19,6 +19,8 @@ WAYPOINTS_JSON = "waypoint_fwdtiny.json"
 
 ### LESS COMMONLY TOUCHED PARAMS ###
 
+EXTRA_HEIGHT = 0
+
 LOGGING_CONFIG = {
     'filename': f"log_USA_Pi{PI_ID if PI_ID else ''}.log",
     'level': "DEBUG",  # Change this to "INFO", "WARNING", etc.

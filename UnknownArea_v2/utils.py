@@ -98,4 +98,4 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
     return frame
 
 CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
-print("Calibration parameters obtained.")
+print("Calibration parameters obtained from UnknownArea utils.")
