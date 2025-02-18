@@ -306,8 +306,11 @@ def label_distance(path_wp, current_pos):
 
     return
 
-def save_json(path_wp, json_name):     # Computes and saves final waypoints into .json file
+def save_json(path_wp, json_name:str):     # Computes and saves final waypoints into .json file
     """
+    :Args:
+    json_name: Do NOT include .json extension
+
     Format of json:
     - distance and angle to NEXT waypoint
     - current waypoint
@@ -450,7 +453,7 @@ while running:
                 running = False
                 user_input = simpledialog.askstring("Save Waypoints", 
                                                         f"Enter JSON filename to save (without .json extension) \nDefault: {WAYPOINTS_JSON_DEFAULT}")
-                filename = WAYPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
+                filename = WAYPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}"
                 save_json(path_wp, filename)
                 print(f"Exited. Saved as {filename}.json.")
                 print_json_waypoints(filename)

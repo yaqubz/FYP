@@ -174,6 +174,7 @@ class MockTello:
         self.stream = None  # Video capture object
         self.stream_on = False  # Stream state
         self.yaw = 0  # Initial yaw value
+        self.height = 100
     
     def connect(self):
         print("Mock: Drone connected.")
@@ -221,6 +222,10 @@ class MockTello:
     def get_yaw(self) -> int:
         print(f"Mock: Current Yaw = {self.yaw}")
         return self.yaw
+    
+    def get_height(self) -> int:
+        print(f"Mock: Current Height = {self.height}")
+        return self.height
     
     def get_distance_tof(self) -> int:
         dist = random.randint(50, 100)  # Mock value for distance
