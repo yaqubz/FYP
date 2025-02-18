@@ -2,7 +2,7 @@
 (IMPT) Run in terminal from main workspace as:
 
     python -m UnknownArea_v2.main
-    python -m UnknownArea_v2.main UnknownArea_v2.params
+    python -m UnknownArea_v2.main shared_params.params
 
 TODO 11 Feb: 
 - ToF (and Streaming to some extent - fail to obtain frame) doesn't work well over RPi

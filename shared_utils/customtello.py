@@ -1,9 +1,14 @@
+"""
+18 Feb - only imported by shared_utils.dronecontroller2; no need to import into main.py!
+"""
+
 import cv2
 import numpy as np
 from djitellopy import Tello
 import time
 import logging  # in decreasing log level: debug > info > warning > error > critical
 import threading
+import random
 
 class CustomTello(Tello):
     def __init__(self, network_config):
@@ -168,7 +173,8 @@ class MockTello:
     def __init__(self):
         self.stream = None  # Video capture object
         self.stream_on = False  # Stream state
-
+        self.yaw = 0  # Initial yaw value
+    
     def connect(self):
         print("Mock: Drone connected.")
     
@@ -183,33 +189,48 @@ class MockTello:
         print("Mock: Taking off...")
     
     def rotate_clockwise(self, angle):
-        print(f"Mock: Rotating clockwise {angle} degrees")
+        self.yaw = (self.yaw + angle) % 360
+        if self.yaw > 180:
+            self.yaw -= 360  # Ensures yaw stays in the range [-180, 180]
+        print(f"Mock: Rotating clockwise by {angle} degrees. New yaw: {self.yaw} degrees.")
     
     def rotate_counter_clockwise(self, angle):
-        print(f"Mock: Rotating counter-clockwise {angle} degrees")
+        self.yaw = (self.yaw - angle) % 360
+        if self.yaw > 180:
+            self.yaw -= 360  # Ensures yaw stays in the range [-180, 180]
+        print(f"Mock: Rotating counter-clockwise by {angle} degrees. New yaw: {self.yaw} degrees.")
     
     def move_forward(self, distance):
-        print(f"Mock: Moving forward {distance} cm")
-
+        print(f"Mock: Moving forward {distance} cm.")
+    
     def get_mission_pad_id(self):
-        return -1   # no pad found
+        print("Mock: No mission pad found.")
+        return -1   # Simulates no pad found
     
     def go_to_height(self, height: int):
-        print(f"Mock: Moving up to {height} cm")
-
+        print(f"Mock: Moving up to {height} cm.")
+    
     def go_to_height_PID(self, height: int):
-        print(f"Mock: Moving up with PID to {height} cm")
-
-    def send_rc_control(*args): # dk how to fix 7 feb
-        print(f"Mock: Received rc command {args}")
-
+        print(f"Mock: Moving up with PID to {height} cm.")
+    
+    def send_rc_control(self, x, y, z, yaw):
+        print(f"Mock: Received rc control commands. x: {x}, y: {y}, z: {z}, yaw: {yaw}")
+        self.yaw += yaw/5  # Adjust the yaw based on the rc control command. E.g. rc yaw 35 causes a 7 degrees yaw per command.
+        self.yaw = (self.yaw + 180) % 360 - 180  # Normalize yaw to [-180, 180]
+    
+    def get_yaw(self) -> int:
+        print(f"Mock: Current Yaw = {self.yaw}")
+        return self.yaw
+    
     def get_distance_tof(self) -> int:
-        print("Mock: Downward ToF = 130cm")
-        return 130
-
+        dist = random.randint(50, 100)  # Mock value for distance
+        print(f"Mock: Downward ToF = {dist}cm")
+        return dist
+    
     def get_ext_tof(self) -> int:
-        print("Mock: Ext ToF = 650mm")
-        return 650
+        ext_dist = random.randint(500, 700)  # Simulate external ToF measurement
+        print(f"Mock: Ext ToF = {ext_dist}mm")
+        return ext_dist
     
     def streamon(self):
         """Start video stream from laptop webcam."""
