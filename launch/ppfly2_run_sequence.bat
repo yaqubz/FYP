@@ -1,5 +1,5 @@
 @REM Start UWBViz/main.py to mark positions of Victims, Danger Zones and Pillars
-python UWBViz/main.py
+python -m UWBViz.main
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] UWBViz/main.py encountered an error. Continuing with the next steps...
 )
@@ -28,7 +28,7 @@ if %ERRORLEVEL% EQU 1 (
 
 
 @REM Start UWBViz/main.py in a new process (i.e. open a new terminal)
-start python UWBViz/main.py
+start python -m UWBViz.main
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] UWBViz/main.py encountered an error. Continuing with the next steps...
 )
@@ -37,7 +37,8 @@ if %ERRORLEVEL% NEQ 0 (
 timeout /t 3 /nobreak
 
 @REM Run PPFLY2/main.py for the flight routine (add --simulate and -f flags if needed)
-python -m PPFLY2.main -sim 1 -f waypoints_samplesmall.json
+@REM python -m PPFLY2.main --sim 1 --f waypoints_samplesmall.json
+python -m PPFLY2.main shared_params.params
 if %ERRORLEVEL% NEQ 0 (
     echo [ERROR] PPFLY/main.py encountered an error.
 )

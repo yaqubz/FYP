@@ -172,59 +172,64 @@ def load_json_waypoints(filename):
 def load_marked_positions(filename='UWBViz/uwb_trace'):
     """
     Load marked positions of obstacles and walls etc. from JSON file and draw them on screen.
+    Can load from multiple files
+    Press 'Z' to reset - how convenient!
     
     Args:
         filename (str): Name of the JSON file to load
     """
+
+    global static_screen_snapshot
     
     try:
         with open(f"{filename}.json", 'r') as f:
             marked_positions = json.load(f)["points"] 
+            walls = []
+            current_wall_start = None
+
+            # Process walls from wall_start to wall_end
+            for point in marked_positions:
+                if point["type"] == "wall_start":
+                    current_wall_start = (point["x"], point["y"])
+                elif point["type"] == "wall_end" and current_wall_start:
+                    walls.append((current_wall_start, (point["x"], point["y"])))
+                    current_wall_start = None  # Reset for the next segment
+
+            # Draw walls as thick black lines
+            for wall in walls:
+                start_x, start_y = wall[0][0]*100, wall[0][1]*100
+                end_x, end_y = wall[1][0]*100, wall[1][1]*100
+                pygame.draw.line(screen, (100, 100, 200), (start_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - start_y/MAP_SIZE_COEFF), (end_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - end_y/MAP_SIZE_COEFF), 5)
+
+            # Draw victims as green triangles
+            for victim in (p for p in marked_positions if p["type"] == "victim"):
+                screen_x, screen_y = victim["x"]*100, victim["y"]*100
+                pygame.draw.polygon(screen, (0, 255, 0), [
+                    (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF - 10),
+                    (screen_x/MAP_SIZE_COEFF - 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10),
+                    (screen_x/MAP_SIZE_COEFF + 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10)
+                ])
+
+            # Draw dangers as red triangles
+            for danger in (p for p in marked_positions if p["type"] == "danger"):
+                screen_x, screen_y = danger["x"]*100, danger["y"]*100
+                pygame.draw.polygon(screen, (255, 0, 0), [
+                    (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF - 10),
+                    (screen_x/MAP_SIZE_COEFF - 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10),
+                    (screen_x/MAP_SIZE_COEFF + 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10)
+                ])
+
+            # Draw pillars as black circles
+            for pillar in (p for p in marked_positions if p["type"] == "pillar"):
+                screen_x, screen_y = pillar["x"]*100, pillar["y"]*100
+                pygame.draw.circle(screen, (0, 0, 0), (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF), 10, 2)
+
+            static_screen_snapshot = screen.copy()      # IMPT: This is the line that sets the background!
         print("[INFO] Marked positions loaded successfully.")
     except FileNotFoundError:
         print("[INFO] No saved marked positions found.")
     except Exception as e:
         print(f"[ERROR] Could not load marked positions: {e}")
-
-    walls = []
-    current_wall_start = None
-
-    # Process walls from wall_start to wall_end
-    for point in marked_positions:
-        if point["type"] == "wall_start":
-            current_wall_start = (point["x"], point["y"])
-        elif point["type"] == "wall_end" and current_wall_start:
-            walls.append((current_wall_start, (point["x"], point["y"])))
-            current_wall_start = None  # Reset for the next segment
-
-    # Draw walls as thick black lines
-    for wall in walls:
-        start_x, start_y = wall[0][0]*100, wall[0][1]*100
-        end_x, end_y = wall[1][0]*100, wall[1][1]*100
-        pygame.draw.line(screen, (100, 100, 200), (start_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - start_y/MAP_SIZE_COEFF), (end_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - end_y/MAP_SIZE_COEFF), 5)
-
-    # Draw victims as green triangles
-    for victim in (p for p in marked_positions if p["type"] == "victim"):
-        screen_x, screen_y = victim["x"]*100, victim["y"]*100
-        pygame.draw.polygon(screen, (0, 255, 0), [
-            (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF - 10),
-            (screen_x/MAP_SIZE_COEFF - 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10),
-            (screen_x/MAP_SIZE_COEFF + 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10)
-        ])
-
-    # Draw dangers as red triangles
-    for danger in (p for p in marked_positions if p["type"] == "danger"):
-        screen_x, screen_y = danger["x"]*100, danger["y"]*100
-        pygame.draw.polygon(screen, (255, 0, 0), [
-            (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF - 10),
-            (screen_x/MAP_SIZE_COEFF - 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10),
-            (screen_x/MAP_SIZE_COEFF + 10, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF + 10)
-        ])
-
-    # Draw pillars as black circles
-    for pillar in (p for p in marked_positions if p["type"] == "pillar"):
-        screen_x, screen_y = pillar["x"]*100, pillar["y"]*100
-        pygame.draw.circle(screen, (0, 0, 0), (screen_x/MAP_SIZE_COEFF, SCREEN_HEIGHT - screen_y/MAP_SIZE_COEFF), 10, 2)
 
 def process_waypoint_input(pos):
 
