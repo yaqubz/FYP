@@ -277,6 +277,7 @@ def main():
     try:
         if not params.NO_FLY:    
             # controller.drone.takeoff()
+            controller.marker_client.send_update('status', status_message='Waiting for takeoff')
             controller.takeoff_simul([11,12])
             logging.info("Taking off for real...")
             controller.marker_client.send_update('status', status_message='Flying')

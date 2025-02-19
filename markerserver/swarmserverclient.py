@@ -116,10 +116,10 @@ class MarkerServer:
 
     def update_drone_status(self, message):
         """
-        Updates the drone's readiness status.
+        Updates drones' readiness status based on message received.
         """
-        
         drone_id = message["drone_id"]
+
         if drone_id not in self.drone_status:
             self.drone_status[drone_id] = {"ready": False}
 
@@ -129,9 +129,12 @@ class MarkerServer:
 
         if message["type"] == "takeoff_request":
             logging.debug(f"{drone_id} requesting takeoff. Message: {message}")
-            drone_id = message["drone_id"]
             waiting_list = message["waiting_list"]
             self.register_ready_drone(drone_id, waiting_list)
+
+        elif message["type"] == "status":
+            logging.debug(f"{drone_id} status update. Message: {message}")
+            self.drone_status[drone_id]["status"] = message["status"]
 
         logging.info(f"Drone Statuses: {self.drone_status}")
 
@@ -163,7 +166,7 @@ class MarkerServer:
             try:
                 data, addr = self.sock.recvfrom(1024)
                 try:
-                    message = json.loads(data.decode())
+                    message:dict = json.loads(data.decode())
                     logging.debug(f"Received message from {addr}: {message}")
                     
                     # Handle client registration message
@@ -173,12 +176,17 @@ class MarkerServer:
                                 self.clients.add(addr)
                                 logging.info(f"New client connected: {addr}")
                             self.broadcast_status_to_one(addr)
-                    elif message.get("type") == 'takeoff_request':  # Drone Status Update (TODO 17 FEB for other conditions)
+                    elif message.get("type") == 'takeoff_request' or message.get("type") == 'status':  # Drone Status Update (TODO 17 FEB for other conditions)
                         self.update_drone_status(message)
-                    elif message.get("marker_id", False):  # Marker Detection Update
+                    elif message.get("type") == 'marker':  # Drone Status Update (TODO 17 FEB for other conditions)
                         self.update_marker_status(message)
                     else:
-                        logging.debug("Should not reach here. See handle_messages in swarmserverclient")
+                        logging.warning("Invalid message format received. See handle_messages in swarmserverclient")
+                        if addr not in self.clients:
+                            with self.lock:
+                                self.clients.add(addr)
+                                logging.info(f"New client connected: {addr}")
+                            self.broadcast_status_to_one(addr)
                     
                     self.broadcast_status()
                         
@@ -382,6 +390,7 @@ class MarkerClient:
         message:Dict = {"drone_id": self.drone_id}       # initializes the message with drone_id (client's class attribute)
 
         if update_type == "marker" and marker_id is not None:
+            message["type"] = "marker"
             message["marker_id"] = marker_id
             if detected is not None:
                 message["detected"] = detected
@@ -389,6 +398,7 @@ class MarkerClient:
                 message["landed"] = landed
 
         elif update_type =="status":
+            message["type"] = "status"
             message["status"] = status_message
 
         message_json = json.dumps(message).encode()

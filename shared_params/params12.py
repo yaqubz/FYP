@@ -20,7 +20,7 @@ WAYPOINTS_JSON = 'waypoint_turnleft.json'
 EXTRA_HEIGHT = 0
 
 LOGGING_CONFIG = {
-    'filename': f"log_USA_Pi{PI_ID if PI_ID else ''}.log",
+    'filename': f"log_Pi{PI_ID if PI_ID else ''}.log",
     'level': "DEBUG",  # Change this to "INFO", "WARNING", etc.
     'format': "%(levelname)s - %(name)s - %(asctime)s - %(message)s",
     'default_logger_name': "DroneController"
