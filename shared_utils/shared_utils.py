@@ -90,7 +90,7 @@ def get_calibration_parameters(TELLO_NO: str = 'E920EB_480P'): # BEST VERSION 30
     # Load calibration parameters
     camera_matrix = np.load(camera_matrix_path)
     dist_coeffs = np.load(dist_coeffs_path)
-    
+    print(f"Calibration parameters obtained for {TELLO_NO}")
     return camera_matrix, dist_coeffs
 
 def normalize_angle(angle: float) -> float:

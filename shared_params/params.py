@@ -1,8 +1,5 @@
 """
-Default params.py file; for Laptop-only simulations!
-
-This file serves as the primary template for other paramsX.py files.
-
+Default params.py file; for Laptop-only simulations! This file serves as the primary template for other paramsX.py files.
 Please ensure all changes to subsequent CHILD paramsX.py are reflected here! Updates need not be reflected in the other direction
 """
 
@@ -21,7 +18,7 @@ WAYPOINTS_JSON = "waypoint_big.json"
 ### LESS COMMONLY TOUCHED PARAMS ###
 
 LOGGING_CONFIG = {
-    'filename': f"log_USA_Pi{PI_ID if PI_ID else ''}.log",
+    'filename': f"log_Pi{PI_ID if PI_ID else ''}.log",
     'level': "DEBUG",  # Change this to "INFO", "WARNING", etc.
     'format': "%(levelname)s - %(name)s - %(asctime)s - %(message)s",
     'default_logger_name': "DroneController"

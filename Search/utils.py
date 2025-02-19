@@ -43,20 +43,10 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
         frame, CAMERA_MATRIX, DIST_COEFF, rvecs, tvecs, 10
     )
     
-    rot_matrix = cv2.Rodrigues(rvecs)[0]
-    euler_angles = cv2.RQDecomp3x3(rot_matrix)[0]
     x, y, z = tvecs[0]
-    roll, pitch, yaw = euler_angles
-    
     euclidean_distance = np.sqrt(x*x + y*y + z*z)
-    
-    position_text = f"Pos (cm): X:{x:.1f} Y:{y:.1f} Z:{z:.1f}"
-    rotation_text = f"Rot (deg): R:{roll:.1f} P:{pitch:.1f} Y:{yaw:.1f}"
     distance_text = f"3D Distance: {euclidean_distance:.1f} cm"
-    
-    cv2.putText(frame, position_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    cv2.putText(frame, rotation_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    cv2.putText(frame, distance_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    cv2.putText(frame, distance_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     
     return frame
 
@@ -144,6 +134,11 @@ def validate_waypoints(json_filename):
 def execute_waypoints_scan_land(dronecontroller:DroneController, waypoint_json_w_ext):
     """
     Executes a given set of waypoints, scans as it is on the way, and lands 
+
+    Scanning methodology:
+    - Rotate first. If turned left, scan left (behind drone previously)
+    - Next, move forward. Scans both sides after moving > 150cm
+
     """
     waypoints_success = True  # Flag to indicate successful execution of all waypoints
     
@@ -179,20 +174,19 @@ def execute_waypoints_scan_land(dronecontroller:DroneController, waypoint_json_w
             
             # Handle forward movements in (20cm, 150cm] increments
             distance = wp['dist_cm']
-            if distance > 200:
-                while distance > 150:
-                    dronecontroller.drone.move_forward(150)
-                    dronecontroller.update_current_pos(distance_cm=150)
-                    distance -= 150
-                    scan_for_marker_bothsides(dronecontroller)
-            if distance > 20:
-                dronecontroller.drone.move_forward(distance)
-                dronecontroller.update_current_pos(distance_cm=distance)
-                if distance > 100:
-                    scan_for_marker_bothsides(dronecontroller)
+            while distance > 200:
+                dronecontroller.drone.move_forward(150)
+                dronecontroller.update_current_pos(distance_cm=150)
+                distance -= 150
+                scan_for_marker_bothsides(dronecontroller)
+
+            # After moving in 150cm increments, the remaining distance will be more than 50cm.
+            dronecontroller.drone.move_forward(distance)
+            dronecontroller.update_current_pos(distance_cm=distance)
+            scan_for_marker_bothsides(dronecontroller)
     
     except Exception as e:
-        logging.error(f"Error occurred during waypoint execution: {e}")
+        logging.error(f"Error occurred during waypoint execution: {e}")     # this error will occur if waypoints not completed and detected something halfway?
         waypoints_success = False
     
     finally:
@@ -212,6 +206,7 @@ def detect_and_land(controller:DroneController):
     """
     TBC 18 Feb - Should find a way to stay inside this loop forever, once the drone detected its first obstacle. Maybe with a RC yaw if it loses sight of the target.
     """
+    marker_latch = False    # once marker_found, latch and don't exit the while loop.
 
     approach_complete = False
     centering_complete = False
@@ -225,10 +220,12 @@ def detect_and_land(controller:DroneController):
         marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame, display_frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
         if marker_found:  
             # Draw marker detection and pose information on the ONE detected valid marker
+
             display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
             logging.info(f"Obtained Marker Status from Server: {controller.marker_client.marker_status}")
             logging.debug(f"Marker detected: {marker_id}. Available: {controller.marker_client.is_marker_available(marker_id)}. Currently locked on: {controller.markernum_lockedon}")
 
+            marker_latch = True
             # Difficult logic, discussed between Yaqub and Gab 11 Feb
             # Also works without a server, since .is_marker_available will return True
             if controller.marker_client.is_marker_available(marker_id) or marker_id == controller.markernum_lockedon:
@@ -238,6 +235,7 @@ def detect_and_land(controller:DroneController):
                     controller.marker_client.send_update(marker_id, detected=True) 
                     logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
                     controller.drone.send_rc_control(0, 0, 0, 0)
+                    time.sleep(1)
                     goto_approach_sequence = True
                     cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (250, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
@@ -271,11 +269,13 @@ def detect_and_land(controller:DroneController):
                 if not centering_complete:
                     if abs(x_error) > centering_threshold:
                         # Calculate yaw speed based on error
-                        yaw_speed = int(np.clip(x_error / 10, -20, 20))
+                        yaw_speed = int(np.clip(x_error / 5, -25, 25))
+                        controller.drone.send_rc_control(0, 0, 0, 0)
+                        time.sleep(0.5)
                         controller.drone.send_rc_control(0, 0, 0, yaw_speed)
                         logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
                     else:
-                        logging.info("Marker centered! Starting approach...")
+                        logging.info(f"Marker centered! : Error = {x_error:.1f}. Starting approach...")
                         controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
                         time.sleep(1)  # Stabilize
                         centering_complete = True
@@ -290,7 +290,7 @@ def detect_and_land(controller:DroneController):
                     current_height = controller.drone.get_distance_tof() - params.EXTRA_HEIGHT
                     current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
-                    logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
+                    logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm | Drone height: {current_height:.1f}cm | 2D distance to marker: {current_distance_2D:.1f}cm")
                     cv2.putText(display_frame, "Approaching...", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
 
                     if current_distance_2D >= 500:
@@ -322,6 +322,14 @@ def detect_and_land(controller:DroneController):
             controller.return_display_frame(display_frame)
             logging.debug("RETURNING DISPLAY FRAME - MARKER FOUND")
 
+        elif marker_latch:  # no marker found now, but was once detected!
+            logging.info("Marker previously found, but lost. Staying put and spinning.")
+            controller.marker_client.send_update(controller.markernum_lockedon, detected=False)
+            controller.return_display_frame(display_frame)
+            logging.debug("RETURNING DISPLAY FRAME - MARKER NOT FOUND, SPINNING SLOWLY")        # TODO TBC should return to main search path
+            controller.drone.send_rc_control(0,0,0,5)
+            continue
+        
         else:   # no marker found
             logging.info("No marker found. Proceed with search.")
             controller.return_display_frame(display_frame)

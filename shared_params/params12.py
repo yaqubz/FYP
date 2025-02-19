@@ -8,11 +8,9 @@ NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure 
 PI_ID:int = 12
 UWBTAG_ID:int = 12
 
-WAYPOINTS_JSON = "waypoint_fwdtiny.json"
-
-
-
-
+# WAYPOINTS_JSON = "waypoint_fwdtiny.json"
+# WAYPOINTS_JSON = 'waypoint2mfwd.json'
+WAYPOINTS_JSON = 'waypoint_turnleft.json'
 
 
 

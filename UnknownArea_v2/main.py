@@ -298,12 +298,12 @@ def main():
    
     # Setup logging
     logger = setup_logging(params, "UnknownSearchArea")
-    logger.info("Starting unknown area main...")
+    logger.info(f"Starting unknown area main with drone_id: {params.PI_ID}")
     controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY)
     try:
         if not params.NO_FLY:    
             # controller.drone.takeoff()
-            controller.takeoff_simul([11,12,13])
+            controller.takeoff_simul([11,12])
             logging.info("Taking off for real...")
             # controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
@@ -320,13 +320,14 @@ def main():
 
         navigation_thread(controller)
 
+    except Exception as e:
+        logging.error(f"Error in main: {e}. Landing.")
+
+    finally:
         logging.info(f"Actually landing for real. End Battery Level: {controller.drone.get_battery()}%")
         controller.drone.end()
         cv2.destroyAllWindows()
         cv2.waitKey(1)
-    
-    except Exception as e:
-        logging.error(f"Error in main: {e}")
 
 if __name__ == "__main__":
     main()

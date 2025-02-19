@@ -8,11 +8,9 @@ NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure 
 PI_ID:int = 13
 UWBTAG_ID:int = 13
 
+# WAYPOINTS_JSON = "waypoint_fwdtiny.json"
+# WAYPOINTS_JSON = 'waypoint2mfwd.json'
 WAYPOINTS_JSON = "waypoint_fwdtiny.json"
-
-
-
-
 
 
 
@@ -22,7 +20,7 @@ WAYPOINTS_JSON = "waypoint_fwdtiny.json"
 EXTRA_HEIGHT = 0
 
 LOGGING_CONFIG = {
-    'filename': f"log_USA_Pi{PI_ID if PI_ID else ''}.log",
+    'filename': f"log_Pi{PI_ID if PI_ID else ''}.log",
     'level': "DEBUG",  # Change this to "INFO", "WARNING", etc.
     'format': "%(levelname)s - %(name)s - %(asctime)s - %(message)s",
     'default_logger_name': "DroneController"

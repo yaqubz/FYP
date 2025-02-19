@@ -55,7 +55,7 @@ class MarkerServer:
                 # time.sleep(1)
                 raise
 
-    def update_marker_status(self, message):
+    def update_marker_status(self, message:Dict):
         """Update marker status and timestamp"""
         with self.lock:
             try:
@@ -67,6 +67,8 @@ class MarkerServer:
                             "detected": False,
                             "landed": False
                         }
+
+                    self.marker_status[marker_id]["drone_id"] = message.get("drone_id", 0)  # TESTING 19 Feb
                     
                     # Update status
                     if "detected" in message:
@@ -216,8 +218,8 @@ class MarkerServer:
             time.sleep(0.5)
             logging.debug("Still waiting...")
 
-        if len(ready_drones) / len(all_waiting_drones) > 0.5:
-            logging.warning(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Sending only these drones: {ready_drones}")
+        if len(ready_drones) / len(all_waiting_drones) >= 0.5:
+            logging.warning(f"{timeout}s timeout reached! 50% or more {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Sending only these drones: {ready_drones}")
             self.send_takeoff_signal(ready_drones)
         else:
             logging.error(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Takeoff aborted.")

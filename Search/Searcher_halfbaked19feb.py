@@ -76,7 +76,7 @@ class VideoStreamHandler:
                 # Get the frame to display
                 display_frame = self.get_display_frame()
                 if display_frame is not None:
-                    cv2.imshow("Drone View", display_frame)
+                    cv2.imshow(f"Drone View {self.controller.drone_id}", display_frame)
 
                 # Keyboard shortcuts
                 key = cv2.waitKey(1)
@@ -133,6 +133,7 @@ def main():
         
         if not params.NO_FLY:
             controller.takeoff_simul([11,12,13])
+            # controller.drone.takeoff()
             logging.info("Taking off for real...")
             controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
