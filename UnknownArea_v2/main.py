@@ -101,11 +101,11 @@ def navigation_thread(controller:DroneController):
 
                     if controller.markernum_lockedon is None or marker_id == controller.markernum_lockedon: # first time detecting an available marker, or subsequent time detecting a marker locked on by it (but shown as no longer available)
                         controller.markernum_lockedon = marker_id
-                        controller.marker_client.send_update(marker_id, detected=True) 
+                        controller.marker_client.send_update('marker', marker_id, detected=True) 
                         logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
                         controller.drone.send_rc_control(0, 0, 0, 0)
                         goto_approach_sequence = True
-                        cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (500, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
 
                     elif centering_complete and marker_id != controller.markernum_lockedon:   
@@ -117,9 +117,9 @@ def navigation_thread(controller:DroneController):
                     
                     else:   # centering incomplete, but lost detection halfway and detected something else. Switch lock-on.
                         logging.debug(f"Switching lock-on from {controller.markernum_lockedon} to {marker_id}...")
-                        controller.marker_client.send_update(controller.markernum_lockedon, detected=False) 
+                        controller.marker_client.send_update('marker', controller.markernum_lockedon, detected=False) 
                         controller.markernum_lockedon = marker_id   # locking onto the new one
-                        controller.marker_client.send_update(controller.markernum_lockedon, detected=True)
+                        controller.marker_client.send_update('marker', controller.markernum_lockedon, detected=True)
                         goto_approach_sequence = False
 
                 else: # marker detected is NOT available
@@ -157,7 +157,7 @@ def navigation_thread(controller:DroneController):
                         current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
                         logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
-                        cv2.putText(display_frame, "Centered. Approaching...", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
+                        cv2.putText(display_frame, "Centered. Approaching...", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 3)
 
                         if current_distance_2D >= 500:
                             step_dist:int = 100
@@ -185,7 +185,7 @@ def navigation_thread(controller:DroneController):
                             logging.info("Approach complete!")
                             controller.drone.send_rc_control(0, 0, 0, 0)
                             approach_complete = True
-                            controller.marker_client.send_update(marker_id, landed=True)
+                            controller.marker_client.send_update('marker', marker_id, landed=True)
                             time.sleep(1)
                             break
 
@@ -199,7 +199,7 @@ def navigation_thread(controller:DroneController):
                 ## MTD 1: Simple U-turn when detected
                 exit_text:str = f"Exit detected {controller.exit_distance_3D:.0f}cm away."
                 logging.info("No valid markers detected." + exit_text)
-                cv2.putText(display_frame, exit_text, (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
+                cv2.putText(display_frame, exit_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 if not params.NO_FLY and controller.exit_distance_3D < 300:
                     logging.info(f"Avoiding exit. Turning 45 degrees.")
                     controller.drone.rotate_clockwise(45)
@@ -212,7 +212,7 @@ def navigation_thread(controller:DroneController):
                 
                 # Publish that its lost track of target. Then resets its locked_on number.
                 logging.debug(f"Nothing detected. Resetting markernum_lockedon from {controller.markernum_lockedon} to None")
-                controller.marker_client.send_update(controller.markernum_lockedon, detected=False)
+                controller.marker_client.send_update('marker', controller.markernum_lockedon, detected=False)
                 controller.markernum_lockedon = None
 
                 if controller.depth_map_colors["red"]["center"] > controller.depth_map_colors["blue"]["center"]:
@@ -273,12 +273,13 @@ def main():
     # Setup logging
     logger = setup_logging(params, "UnknownSearchArea")
     logger.info(f"Starting unknown area main with drone_id: {params.PI_ID}")
-    controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY)
+    controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY, load_midas=True)
     try:
         if not params.NO_FLY:    
             # controller.drone.takeoff()
             controller.takeoff_simul([11,12])
             logging.info("Taking off for real...")
+            controller.marker_client.send_update('status', status_message='Flying')
             # controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
@@ -298,6 +299,7 @@ def main():
         logging.error(f"Error in main: {e}. Landing.")
 
     finally:
+        controller.marker_client.send_update('status', status_message='Landed')
         logging.info(f"Actually landing for real. End Battery Level: {controller.drone.get_battery()}%")
         controller.drone.end()
         cv2.destroyAllWindows()

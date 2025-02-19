@@ -1,8 +1,6 @@
-# WORKS 20 FEB - incorporated GUI for markerstatus
-
 import threading, socket, json, time
 import logging
-from typing import Dict, Set, Any, List
+from typing import Dict, Set, Any, List, Literal
 import tkinter as tk
 from tkinter import ttk
 
@@ -34,18 +32,24 @@ class MarkerServer:
         ## 20 FEB GUI THINGS:
         # Initialize GUI
         self.root = tk.Tk()
-        self.root.title("Marker Status Monitor")
-        self.root.geometry("100x250")  # IMPT: Size of window upon startup! Height x Width
+        self.root.title("Marker and Drone Status Monitor")
+        self.root.geometry("400x500")  # Increased window size to accommodate both tables
 
         # Create a table to display marker statuses
-        self.tree = ttk.Treeview(self.root, columns=("Marker ID", "Detected", "Landed", "Drone ID"), show="headings")
-        self.tree.heading("Marker ID", text="Marker ID")
-        self.tree.heading("Detected", text="Detected")
-        self.tree.heading("Landed", text="Landed")
-        self.tree.heading("Drone ID", text="Drone ID")
+        self.marker_tree = ttk.Treeview(self.root, columns=("Marker ID", "Detected", "Landed", "Drone ID"), show="headings")
+        self.marker_tree.heading("Marker ID", text="Marker ID")
+        self.marker_tree.heading("Detected", text="Detected")
+        self.marker_tree.heading("Landed", text="Landed")
+        self.marker_tree.heading("Drone ID", text="Drone ID")
+        self.marker_tree.pack(fill=tk.BOTH, expand=True)
 
-        # Pack the treeview with resizing
-        self.tree.pack(fill=tk.BOTH, expand=True)
+        # Create a table to display drone statuses
+        self.drone_tree = ttk.Treeview(self.root, columns=("Drone ID", "Ready", "Waiting List", "Status"), show="headings")
+        self.drone_tree.heading("Drone ID", text="Drone ID")
+        self.drone_tree.heading("Ready", text="Ready")
+        self.drone_tree.heading("Waiting List", text="Waiting List")
+        self.drone_tree.heading("Status", text="Status")
+        self.drone_tree.pack(fill=tk.BOTH, expand=True)
 
         # Adjust column width dynamically
         self.root.update_idletasks()  # Ensure layout updates before setting column widths
@@ -79,7 +83,6 @@ class MarkerServer:
                 time.sleep(1)  # Check every second
             except Exception as e:
                 logging.error(f"Error in check_timeouts: {e}")
-                # time.sleep(1)
                 raise
 
     def update_marker_status(self, message:Dict):
@@ -226,8 +229,8 @@ class MarkerServer:
 
             # Keep main thread alive
             while True:
-                time.sleep(1)
-                logging.debug("NOT HERE?")
+                time.sleep(2)
+                logging.debug("GUI closed, but server is still running...")
         except Exception as e:
             logging.error(f"Error in server run: {e}")
 
@@ -276,17 +279,27 @@ class MarkerServer:
     def adjust_column_widths(self):
         """Adjust column widths dynamically based on window size."""
         total_width = self.root.winfo_width()
-        self.tree.column("Marker ID", width=int(total_width * 0.25))  # 25% of window width
-        self.tree.column("Detected", width=int(total_width * 0.25))   # 25%
-        self.tree.column("Landed", width=int(total_width * 0.25))     # 25%
-        self.tree.column("Drone ID", width=int(total_width * 0.25))   # 25%
+        
+        dec1 = float(1/4)
+        self.marker_tree.column("Marker ID", width=int(total_width * dec1))  # 25% of window width
+        self.marker_tree.column("Detected", width=int(total_width * dec1))  
+        self.marker_tree.column("Landed", width=int(total_width * dec1))    
+        self.marker_tree.column("Drone ID", width=int(total_width * dec1))  
+
+        dec2 = float(1/4)
+        self.drone_tree.column("Drone ID", width=int(total_width * dec2))     
+        self.drone_tree.column("Ready", width=int(total_width * dec2))       
+        self.drone_tree.column("Waiting List", width=int(total_width * dec2))
+        self.drone_tree.column("Status", width=int(total_width * dec2))
 
     def update_gui(self):
-        """Update the GUI with the latest marker statuses."""
+        """Update the GUI with the latest marker and drone statuses."""
         try:
-            # Clear the current table
-            for row in self.tree.get_children():
-                self.tree.delete(row)
+            # Clear the current tables
+            for row in self.marker_tree.get_children():
+                self.marker_tree.delete(row)
+            for row in self.drone_tree.get_children():
+                self.drone_tree.delete(row)
 
             # Add rows for each marker status
             for marker_id, status in self.marker_status.items():        # key:str = id; value:dict = status
@@ -299,7 +312,20 @@ class MarkerServer:
                     detected_str = "✔ True" if detected else "❌ False"
                     landed_str = "✔ True" if landed else "❌ False"
 
-                    self.tree.insert("", "end", values=(marker_id, detected_str, landed_str, drone_id))
+                    self.marker_tree.insert("", "end", values=(marker_id, detected_str, landed_str, drone_id))
+
+            # Add rows for each drone status
+            for drone_id, status in self.drone_status.items():
+                if isinstance(status, dict):  # Verify status is a dictionary
+                    ready = status.get("ready", False)
+                    waiting_list = status.get("waiting_list", [])
+                    status_str = status.get("status", "no status")
+
+                    # Use Unicode green check (✔) and red cross (❌) for clarity
+                    ready_str = "✔ True" if ready else "❌ False"
+                    waiting_list_str = ", ".join(map(str, waiting_list))
+
+                    self.drone_tree.insert("", "end", values=(drone_id, ready_str, waiting_list_str, status_str))
 
         except Exception as e:
             logging.error(f"Error updating GUI: {e}")
@@ -321,7 +347,7 @@ class MarkerClient:
         self.marker_status = {}         # Keeps a local copy of marker_status, to be updated by the server through the receive_updates thread
         threading.Thread(target=self.receive_updates, daemon=True).start()
 
-        self.send_update(-1)  # Send an initial message to register with the server
+        self.send_update('marker', marker_id=-1)  # Send an initial message to register with the server
         logging.info(f"Marker client {drone_id} broadcasting on {self.broadcast_ip}:{self.server_port}")
 
     def send_takeoff_request(self, waiting_list:list):
@@ -342,21 +368,35 @@ class MarkerClient:
 
         logging.info(f"Drone {self.drone_id} is ready and waiting for {waiting_list} to takeoff together.")
     
-    def send_update(self, marker_id: int, detected=None, landed=None):
-        if marker_id is not None:
-            message = {"marker_id": marker_id}
-            message["drone_id"] = self.drone_id
+    def send_update(self, update_type:Literal["status","marker"], 
+                    marker_id:int=None, detected:bool=None, landed:bool=None,
+                    status_message:str=''):
+        """
+        19 Feb - keep separate from send_takeoff_request since it has an additional waiting_list argument
+
+                message is a dictionary: 
+                {"drone_id": 1, "update_type": "marker", "marker": 2, "detected": True}
+                {"drone_id": 2, "update_type": "status", "status": "Centering"}
+
+        """
+        message:Dict = {"drone_id": self.drone_id}       # initializes the message with drone_id (client's class attribute)
+
+        if update_type == "marker" and marker_id is not None:
+            message["marker_id"] = marker_id
             if detected is not None:
                 message["detected"] = detected
             if landed is not None:
                 message["landed"] = landed
-            message_json = json.dumps(message).encode()
 
-            for _ in range(5):  # Send the message 5 times for reliability
-                self.sock.sendto(message_json, (self.broadcast_ip, self.server_port))
-                time.sleep(0.03)  # Small delay to prevent flooding
+        elif update_type =="status":
+            message["status"] = status_message
 
-            logging.debug(f"MarkerClient sent {message}")
+        message_json = json.dumps(message).encode()
+        for _ in range(5):  # Send the message 5 times for reliability
+            self.sock.sendto(message_json, (self.broadcast_ip, self.server_port))
+            time.sleep(0.03)  # Small delay to prevent flooding
+
+        logging.debug(f"MarkerClient {self.drone_id} sent {message} (sent five times for reliability)")
 
     def receive_updates(self):  # Background thread
         while True:
