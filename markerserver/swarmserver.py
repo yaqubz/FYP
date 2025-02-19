@@ -4,6 +4,7 @@
 
 """
 python -m markerserver.swarmserver
+Redundant caa 20 FEB
 """
 
 import logging

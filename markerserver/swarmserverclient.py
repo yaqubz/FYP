@@ -1,17 +1,18 @@
-# 17 Feb TESTED VIRTUAL, UNTESTED IRL - V2 of MarkerServerClient, with simultaneous takeoff
-# TODO (once stable - refactor Marker* to Swarm*)
+# WORKS 20 FEB - incorporated GUI for markerstatus
 
 import threading, socket, json, time
 import logging
 from typing import Dict, Set, Any, List
+import tkinter as tk
+from tkinter import ttk
 
 class MarkerServer:
     def __init__(self, host='0.0.0.0', port=5005, timeout=5):
         self.host = host
         self.port = port
         self.timeout = timeout
-        self.marker_status: Dict[str, Dict[str, Any]] = {}
-        self.drone_status: Dict[str, Dict[str, Any]] = {} # Tracks which drones are ready and their waiting list
+        self.marker_status: Dict[str, Dict[str, Any]] = {}  # Tracks which markers are landed, detected, and by who
+        self.drone_status: Dict[str, Dict[str, Any]] = {}   # Tracks which drones are ready and their waiting list
         self.takeoff_waitlist = set()
         self.clients: Set[tuple] = set()
         self.lock = threading.Lock()
@@ -29,6 +30,32 @@ class MarkerServer:
         self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
         logging.info(f"Swarm server started on {self.host}:{self.port}")
+
+        ## 20 FEB GUI THINGS:
+        # Initialize GUI
+        self.root = tk.Tk()
+        self.root.title("Marker Status Monitor")
+        self.root.geometry("100x250")  # IMPT: Size of window upon startup! Height x Width
+
+        # Create a table to display marker statuses
+        self.tree = ttk.Treeview(self.root, columns=("Marker ID", "Detected", "Landed", "Drone ID"), show="headings")
+        self.tree.heading("Marker ID", text="Marker ID")
+        self.tree.heading("Detected", text="Detected")
+        self.tree.heading("Landed", text="Landed")
+        self.tree.heading("Drone ID", text="Drone ID")
+
+        # Pack the treeview with resizing
+        self.tree.pack(fill=tk.BOTH, expand=True)
+
+        # Adjust column width dynamically
+        self.root.update_idletasks()  # Ensure layout updates before setting column widths
+        self.adjust_column_widths()
+
+        # Bind window resize event
+        self.root.bind("<Configure>", lambda event: self.adjust_column_widths())
+
+        # Start updating the GUI periodically
+        self.update_gui()
 
     def check_timeouts(self):
         """Check for markers that haven't been updated and clear their detected status"""
@@ -185,8 +212,6 @@ class MarkerServer:
         except Exception as e:
             logging.error(f"Error in broadcast_status: {e}")
 
-
-
     def run(self):
         try:
             threads = [
@@ -195,14 +220,20 @@ class MarkerServer:
             ]
             for thread in threads:
                 thread.start()
-            
+
+            # Start the GUI main loop
+            self.root.mainloop()
+
             # Keep main thread alive
             while True:
                 time.sleep(1)
+                logging.debug("NOT HERE?")
         except Exception as e:
             logging.error(f"Error in server run: {e}")
 
-    def wait_and_takeoff(self, all_waiting_drones, timeout=10):
+    ### SIMUL TAKEOFF FUNCTIONS
+
+    def wait_and_takeoff(self, all_waiting_drones, timeout=10, threshold=0.5):
         """
         NEW FXN 17 FEB
         Waits for all drones in the waiting list to be ready before sending a takeoff signal.
@@ -212,20 +243,18 @@ class MarkerServer:
             status_copy = self.drone_status.copy()
             ready_drones = [d for d in all_waiting_drones if status_copy.get(d, {}).get("ready", False)]
             if set(ready_drones) == set(all_waiting_drones):
-                logging.debug("All drones ready for takeoff!")
+                logging.info("All drones ready for takeoff!")
                 self.send_takeoff_signal(ready_drones)
                 break
             time.sleep(0.5)
-            logging.debug("Still waiting...")
+            logging.debug(f"Still waiting... {round((time.time() - start_time),2)}/{timeout}s")
 
-        if len(ready_drones) / len(all_waiting_drones) >= 0.5:
-            logging.warning(f"{timeout}s timeout reached! 50% or more {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Sending only these drones: {ready_drones}")
+        if len(ready_drones) / len(all_waiting_drones) >= threshold:
+            logging.warning(f"{timeout}s timeout reached! {threshold*100}% or more {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Sending only these drones: {ready_drones}")
             self.send_takeoff_signal(ready_drones)
         else:
             logging.error(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Takeoff aborted.")
 
-        
-    
     def send_takeoff_signal(self, ready_drones:List):
         """
         Sends takeoff signal to all ready drones.
@@ -241,8 +270,42 @@ class MarkerServer:
                     self.broadcast_sock.sendto(takeoff_message, client_addr)
                 except Exception as e:
                     logging.warning(f"Failed to send to client {client_addr}: {e}")
+    
+    ### 20 FEB GUI FUNCTIONS
 
+    def adjust_column_widths(self):
+        """Adjust column widths dynamically based on window size."""
+        total_width = self.root.winfo_width()
+        self.tree.column("Marker ID", width=int(total_width * 0.25))  # 25% of window width
+        self.tree.column("Detected", width=int(total_width * 0.25))   # 25%
+        self.tree.column("Landed", width=int(total_width * 0.25))     # 25%
+        self.tree.column("Drone ID", width=int(total_width * 0.25))   # 25%
 
+    def update_gui(self):
+        """Update the GUI with the latest marker statuses."""
+        try:
+            # Clear the current table
+            for row in self.tree.get_children():
+                self.tree.delete(row)
+
+            # Add rows for each marker status
+            for marker_id, status in self.marker_status.items():        # key:str = id; value:dict = status
+                if isinstance(status, dict):  # Verify status is a dictionary
+                    detected = status.get("detected", False)
+                    landed = status.get("landed", False)
+                    drone_id = status.get("drone_id", 0)
+
+                    # Use Unicode green check (✔) and red cross (❌) for clarity
+                    detected_str = "✔ True" if detected else "❌ False"
+                    landed_str = "✔ True" if landed else "❌ False"
+
+                    self.tree.insert("", "end", values=(marker_id, detected_str, landed_str, drone_id))
+
+        except Exception as e:
+            logging.error(f"Error updating GUI: {e}")
+
+        # Schedule the next update (refresh every 500ms)
+        self.root.after(500, self.update_gui)
 
 class MarkerClient:
     def __init__(self, drone_id=0, server_port=5005, broadcast_ip="255.255.255.255"):
@@ -260,18 +323,6 @@ class MarkerClient:
 
         self.send_update(-1)  # Send an initial message to register with the server
         logging.info(f"Marker client {drone_id} broadcasting on {self.broadcast_ip}:{self.server_port}")
-
-    # def send_ready_signal(self):
-    #     """
-    #     TBC IF NEEDED
-    #     Notify the server that this drone is ready for takeoff.
-    #     This method is called in by the DroneController in takeoff_simul
-    #     """
-    #     self.ready = True
-    #     message = json.dumps({"drone_id": self.drone_id, "ready": True}).encode()
-    #     self.sock.sendto(message, (self.broadcast_ip, self.server_port))
-    #     logging.info(f"Sent ready signal for Drone ID {self.drone_id}")
-
 
     def send_takeoff_request(self, waiting_list:list):
         """
@@ -328,7 +379,7 @@ class MarkerClient:
 
     def is_marker_available(self, marker_id):
         marker_id = str(marker_id)  # Ensure it's a string to match dictionary keys
-        marker_data = self.marker_status.get(marker_id)
+        marker_data:dict = self.marker_status.get(marker_id)
         if marker_data is None:
             return True  # Marker has never been seen before -> Available
         detected = marker_data.get("detected", False)   # False is the default value to return if "detected" key doesn't exist. If "detected": False, also returns false.
