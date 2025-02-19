@@ -211,6 +211,7 @@ class DroneController:
         self.waypoints_executed.append({"x_cm": self.my_current_pos[0], "y_cm": self.my_current_pos[1], 
                                         "orientation_deg": self.my_current_orientation, "imu_orientation_deg": self.my_imu_orientation,
                                         "distance_cm": distance_cm, "rotation_deg": rotation_deg})
+        logging.info(f"Updated waypoints executed: {self.waypoints_executed}")
 
     def detect_markers(self, frame, display_frame, marker_size=14.0):
         """

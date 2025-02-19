@@ -148,29 +148,22 @@ def execute_waypoints_scan_land(dronecontroller:DroneController, waypoint_json_w
             data = json.load(f)
         
         # Process for each waypoint: Rotate first, then move forward in a straight line. 
+        # IMPT (19 Feb) - once the drone detects a marker during the scan, it cannot return to doing the search path anymore! (for now)
 
         for wp in data['wp']:
-            # Handle rotation if necessary
+            # Handle rotation if necessary. Scan for marker (on that side) after rotation, to see behind the drone's previous position
             dronecontroller.update_current_pos()
             dronecontroller.status = "Orienting"
             if wp['angle_deg'] != 0:
                 if wp['angle_deg'] < 0:
                     dronecontroller.drone.rotate_clockwise(int(abs(wp['angle_deg'])))
-                else:
-                    dronecontroller.drone.rotate_counter_clockwise(int(abs(wp['angle_deg'])))
-                time.sleep(1)  # Wait for rotation to complete
-                
-                # Update the position based on rotation
-                dronecontroller.update_current_pos(rotation_deg=wp['angle_deg'])
-            
-                # Scan for marker after rotation
-                if wp['angle_deg'] < 0:     # i.e. rotated clockwise / turned right, so should check the unchecked areas behind me previously
+                    dronecontroller.update_current_pos(rotation_deg=wp['angle_deg'])
                     scan_for_marker_oneside(dronecontroller, 'right')
                 else:
+                    dronecontroller.drone.rotate_counter_clockwise(int(abs(wp['angle_deg'])))
+                    dronecontroller.update_current_pos(rotation_deg=wp['angle_deg'])
                     scan_for_marker_oneside(dronecontroller, 'left')
-                
-                # Update position after scanning
-                dronecontroller.update_current_pos()
+                time.sleep(1)  # Wait for rotation to complete
             
             # Handle forward movements in (20cm, 150cm] increments
             distance = wp['dist_cm']
@@ -235,9 +228,9 @@ def detect_and_land(controller:DroneController):
                     controller.marker_client.send_update(marker_id, detected=True) 
                     logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
                     controller.drone.send_rc_control(0, 0, 0, 0)
-                    time.sleep(1)
+                    # time.sleep(1) # for stabilisation? but also slows down video feed
                     goto_approach_sequence = True
-                    cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (250, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                    cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
 
                 elif centering_complete and marker_id != controller.markernum_lockedon:   
@@ -269,13 +262,13 @@ def detect_and_land(controller:DroneController):
                 if not centering_complete:
                     if abs(x_error) > centering_threshold:
                         # Calculate yaw speed based on error
-                        yaw_speed = int(np.clip(x_error / 5, -25, 25))
+                        yaw_speed = int(np.clip(x_error / 5, -25, 25))      # TODO: Needs fine-tuning
                         controller.drone.send_rc_control(0, 0, 0, 0)
                         time.sleep(0.5)
                         controller.drone.send_rc_control(0, 0, 0, yaw_speed)
                         logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
                     else:
-                        logging.info(f"Marker centered! : Error = {x_error:.1f}. Starting approach...")
+                        logging.info(f"Marker centered! Error = {x_error:.1f}. Starting approach...")
                         controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
                         time.sleep(1)  # Stabilize
                         centering_complete = True
@@ -291,7 +284,7 @@ def detect_and_land(controller:DroneController):
                     current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
                     logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm | Drone height: {current_height:.1f}cm | 2D distance to marker: {current_distance_2D:.1f}cm")
-                    cv2.putText(display_frame, "Approaching...", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
+                    cv2.putText(display_frame, "Centering Complete. Approaching...", (10, 140), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
 
                     if current_distance_2D >= 500:
                         step_dist:int = 100

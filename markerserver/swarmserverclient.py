@@ -344,6 +344,6 @@ if __name__ == "__main__":      # Usually should not run directly?
     formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
     server = MarkerServer()
     server.run()
