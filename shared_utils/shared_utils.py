@@ -1,4 +1,4 @@
-import importlib, sys, logging, os
+import importlib, sys, logging, os, time
 import numpy as np
 from typing import Optional
 
@@ -101,6 +101,26 @@ def normalize_angle(angle: float) -> float:
     if angle > 180:
         angle -= 360  # Shift down to [-180, 180)
     return angle
+
+def capture_frame(frame_reader, max_retries:int = 3):
+    # Get frame with retry mechanism
+    retry_count = 0
+    frame = None
+    while frame is None and retry_count < max_retries:
+        try:
+            frame = frame_reader.frame
+            if frame is None:
+                logging.debug("Frame capture failed, retrying...")
+                time.sleep(0.1)
+                retry_count += 1
+        except Exception as e:
+            logging.warning(f"Frame capture failed: {e}. Returning empty frame.")
+            frame = None
+              
+        if frame is None:
+            logging.warning(f"Failed to capture frame after {retry_count} retries")
+
+    return frame
 
 # Ensures variables are accessible by all scripts
 params = load_params()

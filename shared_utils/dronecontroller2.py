@@ -4,9 +4,11 @@ import time
 from cv2 import aruco
 import numpy as np
 import math
-from threading import Lock
-from typing import List, Dict
+import threading
+from threading import Lock, Event
 import logging  # in decreasing log level: debug > info > warning > error > critical
+from typing import List, Dict
+
 
 from .customtello import CustomTello, MockTello
 from markerserver.swarmserverclient import MarkerClient
@@ -20,14 +22,13 @@ class DroneController:
     """
     No takeoff / flying / landing commands takes place here. (caa 17 Feb)
     """
-    def __init__(self, network_config, drone_id, laptop_only = False, load_midas = True):
+    def __init__(self, network_config, drone_id, laptop_only = False, load_midas = True, imshow = True):
         # Initialize Tello
         logging.debug(f"Laptop only (bool): {laptop_only}")
         self.drone = MockTello() if laptop_only else CustomTello(network_config)
         self.drone.connect()
         logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
         self.drone.streamon()
-        self.video_handler = None
         
         if load_midas:
             # Initialize MiDaS model
@@ -88,29 +89,106 @@ class DroneController:
         # Swarm Server/Client (17 Feb new)
         self.marker_client = MarkerClient(drone_id = drone_id)
 
+        # 19 FEB NEW Video Stream Properties
+        self.frame_reader = self.drone.get_frame_read()
+        self.current_frame = None
+        self.display_frame = None
+        self.frame_lock = Lock()
+        self.stream_thread = None
+        self.stop_event = Event()
+        time.sleep(2)
 
-    # 18 FEB NEW VIDEO HANDLING
+        self.start_video_stream(imshow=imshow)
 
-    def set_video_handler(self, video_handler):
-        """Set the video handler reference"""
-        self.video_handler = video_handler
 
+    # 19 FEB NEW VIDEO HANDLING
+
+    def start_video_stream(self, imshow:bool = True):
+        """Start the video streaming in a separate thread"""
+        self.stop_event.clear()
+        self.stream_thread = threading.Thread(target=self._stream_video, args={imshow,})
+        self.stream_thread.daemon = True
+        self.stream_thread.start()
+        
+    def stop_video_stream(self):
+        """Stop the video streaming thread"""
+        self.stop_event.set()
+        if self.stream_thread and self.stream_thread.is_alive():
+            self.stream_thread.join(timeout=2)
+            
     def get_current_frame(self):
-        """Get the latest frame from video handler"""
-        if self.video_handler:
-            return self.video_handler.get_current_frame()
-        return None
-
+        """Thread-safe method to get the latest frame. External method."""
+        with self.frame_lock:
+            return self.current_frame.copy() if self.current_frame is not None else None
+        
     def get_display_frame(self):
-        """Get the display frame from video handler"""
-        if self.video_handler:
-            return self.video_handler.get_display_frame()
-        return None
-    
-    def return_display_frame(self, frame):
-        """Returns annotated frame to video handler"""
-        if self.video_handler:
-            self.video_handler.return_display_frame(frame)
+        """Thread-safe method to get the display frame. Internal method."""
+        with self.frame_lock:
+            return self.display_frame.copy() if self.display_frame is not None else None
+        
+    def set_display_frame(self, frame):
+        """Thread-safe method to set the display frame. External method."""
+        with self.frame_lock:
+            self.display_frame = frame.copy() if frame is not None else None
+            
+    def _stream_video(self, imshow:bool = True):
+        """Video streaming thread function"""
+        while not self.stop_event.is_set():
+            try:
+                # Capture new frame
+                frame = capture_frame(self.frame_reader)
+                if frame is None:
+                    continue
+                    
+                # Store frame thread-safely
+                with self.frame_lock:
+                    self.current_frame = frame.copy()
+                
+                # Display the frame
+                display_frame = self.get_display_frame()
+                if display_frame is not None and imshow:
+                    cv2.imshow(f"Drone View {self.drone_id}", display_frame)
+
+                # Handle keyboard input
+                key = cv2.waitKey(1)
+                if key != -1:
+                    if key == ord('q'):
+                        logging.info("Quit command received")
+                        self.stop_event.set()
+                        break
+                    elif key == ord('l'):
+                        logging.debug("DEBUG LOGPOINT")
+                    # Handle any additional key commands
+                    self.handle_key_command(key)
+
+            except Exception as e:
+                logging.error(f"Error in video stream: {e}")
+                time.sleep(0.1)
+                
+        self._cleanup()
+            
+    def handle_key_command(self, key):
+        """Handle keyboard commands - can be overridden by subclasses"""
+        pass
+        
+    def _cleanup(self):
+        """Clean up resources when video stream ends"""
+        cv2.destroyAllWindows()
+        logging.info("Destroying all windows.")
+        for i in range(4):
+            cv2.waitKey(1)
+            
+        # Shutdown drone
+        self.drone.streamoff()
+        self.drone.land()
+        self.drone.end()
+        
+    def shutdown(self):
+        """Properly shutdown the controller"""
+        self.stop_video_stream()
+        self._cleanup()
+
+    ## END OF NEW VIDEO 
     
     def takeoff_simul(self, drones_list:list):
         """
@@ -185,6 +263,8 @@ class DroneController:
         
     def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
         """
+        TODO 19 FEB - doesnt work; can also take in an argument to set the actual current pos? inspo PPFLY2
+
         :args:
         rotation_deg: input given in as GUI json (i.e. +ve ccw) 
 

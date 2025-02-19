@@ -4,25 +4,35 @@ from shared_utils.shared_utils import CAMERA_MATRIX, DIST_COEFF, normalize_angle
 from typing import List, Dict, Literal
 from shared_utils.dronecontroller2 import DroneController
 
-def capture_frame(frame_reader, max_retries:int = 3):
-    # Get frame with retry mechanism
-    retry_count = 0
-    frame = None
-    while frame is None and retry_count < max_retries:
-        try:
-            frame = frame_reader.frame
-            if frame is None:
-                logging.debug("Frame capture failed, retrying...")
-                time.sleep(0.1)
-                retry_count += 1
-        except Exception as e:
-            logging.warning(f"Frame capture failed: {e}. Returning empty frame.")
-            frame = None
-              
-        if frame is None:
-            logging.warning(f"Failed to capture frame after {retry_count} retries")
+def validate_waypoints(json_filename):
+    with open(json_filename, 'r') as f:
+        data = json.load(f)
+    
+    valid = True
+    for i, wp in enumerate(data['wp']): # wp is the datapoint for each waypoint (its coordinate, and distance/angle to next waypoint)
+        # Check distance
+        if wp['dist_cm'] < 20 and not i+1 == len(data['wp']):
+            print(i, len(data['wp']))
+            print(f"[WARNING] Waypoint {i+1} distance ({wp['dist_cm']}cm) is below minimum 20cm")
+            valid = False
+        if wp['dist_cm'] > 500:
+            print(f"[INFO] Waypoint {i+1} distance ({wp['dist_cm']}cm) will be split into multiple commands")
+        
+        # Check angle
+        if abs(wp['angle_deg']) > 360:
+            print(f"[WARNING] Waypoint {i+1} angle ({wp['angle_deg']}°) exceeds 360 degrees")
+            valid = False
+    
+        # Check for dist_cm = 0 condition (only valid if it is last waypoint; invalid otherwise.)
+        if wp['dist_cm'] == 0 and i+1 == len(data['wp']):
+            print(f"[INFO] Final Waypoint {i+1} distance is zero to indicate end of flight routine.")
+        elif not wp['dist_cm'] == 0 and i+1 == len(data['wp']):
+            print(f"[INFO] Final Waypoint {i+1} distance is NOT zero to indicate end of flight routine.") # TBC 7 Jan extra?
+        elif wp['dist_cm'] == 0:
+            print(f"[WARNING] Waypoint {i+1} distance is zero but is not the final waypoint. Invalid flight path.") # TBC 7 Jan extra?
+            valid = False
 
-    return frame
+    return valid
 
 def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
     """Draw pose estimation axes and information on frame"""
@@ -97,130 +107,37 @@ def scan_for_marker_oneside(controller: DroneController, direction: Literal["lef
     current_heading = controller.drone.get_yaw()
     logging.info(f"Finished scanning {direction}, no markers detected. Start heading: {start_heading}. Reverting to heading: {current_heading}.")
     time.sleep(1)
-
-
-def validate_waypoints(json_filename):
-    with open(json_filename, 'r') as f:
-        data = json.load(f)
-    
-    valid = True
-    for i, wp in enumerate(data['wp']): # wp is the datapoint for each waypoint (its coordinate, and distance/angle to next waypoint)
-        # Check distance
-        if wp['dist_cm'] < 20 and not i+1 == len(data['wp']):
-            print(i, len(data['wp']))
-            print(f"[WARNING] Waypoint {i+1} distance ({wp['dist_cm']}cm) is below minimum 20cm")
-            valid = False
-        if wp['dist_cm'] > 500:
-            print(f"[INFO] Waypoint {i+1} distance ({wp['dist_cm']}cm) will be split into multiple commands")
-        
-        # Check angle
-        if abs(wp['angle_deg']) > 360:
-            print(f"[WARNING] Waypoint {i+1} angle ({wp['angle_deg']}°) exceeds 360 degrees")
-            valid = False
-    
-        # Check for dist_cm = 0 condition (only valid if it is last waypoint; invalid otherwise.)
-        if wp['dist_cm'] == 0 and i+1 == len(data['wp']):
-            print(f"[INFO] Final Waypoint {i+1} distance is zero to indicate end of flight routine.")
-        elif not wp['dist_cm'] == 0 and i+1 == len(data['wp']):
-            print(f"[INFO] Final Waypoint {i+1} distance is NOT zero to indicate end of flight routine.") # TBC 7 Jan extra?
-        elif wp['dist_cm'] == 0:
-            print(f"[WARNING] Waypoint {i+1} distance is zero but is not the final waypoint. Invalid flight path.") # TBC 7 Jan extra?
-            valid = False
-
-    return valid
-
-
-
-def execute_waypoints_scan_land(dronecontroller:DroneController, waypoint_json_w_ext):
-    """
-    Executes a given set of waypoints, scans as it is on the way, and lands 
-
-    Scanning methodology:
-    - Rotate first. If turned left, scan left (behind drone previously)
-    - Next, move forward. Scans both sides after moving > 150cm
-
-    """
-    waypoints_success = True  # Flag to indicate successful execution of all waypoints
-    
-    try:       
-        # Read waypoints from file
-        with open(f'{waypoint_json_w_ext}', 'r') as f:
-            data = json.load(f)
-        
-        # Process for each waypoint: Rotate first, then move forward in a straight line. 
-        # IMPT (19 Feb) - once the drone detects a marker during the scan, it cannot return to doing the search path anymore! (for now)
-
-        for wp in data['wp']:
-            # Handle rotation if necessary. Scan for marker (on that side) after rotation, to see behind the drone's previous position
-            dronecontroller.update_current_pos()
-            dronecontroller.status = "Orienting"
-            if wp['angle_deg'] != 0:
-                if wp['angle_deg'] < 0:
-                    dronecontroller.drone.rotate_clockwise(int(abs(wp['angle_deg'])))
-                    dronecontroller.update_current_pos(rotation_deg=wp['angle_deg'])
-                    scan_for_marker_oneside(dronecontroller, 'right')
-                else:
-                    dronecontroller.drone.rotate_counter_clockwise(int(abs(wp['angle_deg'])))
-                    dronecontroller.update_current_pos(rotation_deg=wp['angle_deg'])
-                    scan_for_marker_oneside(dronecontroller, 'left')
-                time.sleep(1)  # Wait for rotation to complete
-            
-            # Handle forward movements in (20cm, 150cm] increments
-            distance = wp['dist_cm']
-            while distance > 200:
-                dronecontroller.drone.move_forward(150)
-                dronecontroller.update_current_pos(distance_cm=150)
-                distance -= 150
-                scan_for_marker_bothsides(dronecontroller)
-
-            # After moving in 150cm increments, the remaining distance will be more than 50cm.
-            dronecontroller.drone.move_forward(distance)
-            dronecontroller.update_current_pos(distance_cm=distance)
-            scan_for_marker_bothsides(dronecontroller)
-    
-    except Exception as e:
-        logging.error(f"Error occurred during waypoint execution: {e}")     # this error will occur if waypoints not completed and detected something halfway?
-        waypoints_success = False
-    
-    finally:
-        # Stop any ongoing RC control commands
-        dronecontroller.drone.send_rc_control(0, 0, 0, 0)
-        if dronecontroller.drone.is_flying:
-            if waypoints_success:
-                logging.info("All waypoints completed. Initiating landing sequence...")
-            else:
-                logging.error("Waypoint execution did not complete successfully. Initiating emergency landing...")
-            dronecontroller.drone.end()
-        else:
-            print("Drone already landed.")
         
 def detect_and_land(controller:DroneController):
 
     """
+    Internal; called by scanning function.
+
     TBC 18 Feb - Should find a way to stay inside this loop forever, once the drone detected its first obstacle. Maybe with a RC yaw if it loses sight of the target.
     """
-    marker_latch = False    # once marker_found, latch and don't exit the while loop.
-
+    marker_latch = False    # once marker_found, latch and don't exit the while loop immediately, even if it loses detection.
     approach_complete = False
     centering_complete = False
     centering_threshold = 30    # in px
 
     while not approach_complete:
         # Check for markers
-        logging.debug("detect_and_land GETTING FRAME")
         frame = controller.get_current_frame()
         display_frame = frame.copy()
         marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame, display_frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
         if marker_found:  
             # Draw marker detection and pose information on the ONE detected valid marker
-
+            spin_count = 0      
             display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
             logging.info(f"Obtained Marker Status from Server: {controller.marker_client.marker_status}")
             logging.debug(f"Marker detected: {marker_id}. Available: {controller.marker_client.is_marker_available(marker_id)}. Currently locked on: {controller.markernum_lockedon}")
 
             marker_latch = True
-            # Difficult logic, discussed between Yaqub and Gab 11 Feb
-            # Also works without a server, since .is_marker_available will return True
+
+            # PART 1: DETECTION AND LOCK-ON LOGIC
+                # Difficult logic, discussed between Yaqub and Gab 11 Feb
+                # Also works without a server, since .is_marker_available will return True
+                # Can be tested remotely; Has worked well caa 14 Feb
             if controller.marker_client.is_marker_available(marker_id) or marker_id == controller.markernum_lockedon:
 
                 if controller.markernum_lockedon is None or marker_id == controller.markernum_lockedon: # first time detecting an available marker, or subsequent time detecting a marker locked on by it (but shown as no longer available)
@@ -231,7 +148,6 @@ def detect_and_land(controller:DroneController):
                     # time.sleep(1) # for stabilisation? but also slows down video feed
                     goto_approach_sequence = True
                     cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-
 
                 elif centering_complete and marker_id != controller.markernum_lockedon:   
                     # centering complete, but lost detection and detected another valid and available marker
@@ -251,6 +167,9 @@ def detect_and_land(controller:DroneController):
                 logging.info(f"Valid marker {marker_id} is NOT available (and not already locked-on previously).")
                 goto_approach_sequence = False
             
+            # PART 2: APPROACH SEQUENCE LOGIC
+                # Still work in progress caa 20 Feb
+                # Can only be tested properly IRL
             if goto_approach_sequence is True and not params.NO_FLY:                  
                 logging.info(f"Still locked on and centering/approaching marker {controller.markernum_lockedon}...")
                 
@@ -287,7 +206,7 @@ def detect_and_land(controller:DroneController):
                     cv2.putText(display_frame, "Centering Complete. Approaching...", (10, 140), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
 
                     if current_distance_2D >= 500:
-                        step_dist:int = 100
+                        step_dist:int = 150
                         logging.info(f"{current_distance_2D:.2f}cm distance too large. Stepping forward {step_dist}cm to approach marker...")
                         # controller.drone.send_rc_control(0, 0, 0, 0)
                         controller.drone.move_forward(step_dist)
@@ -296,7 +215,6 @@ def detect_and_land(controller:DroneController):
                         continue        # re-enter the loop; need to re-detect marker and re-measure distance. 
 
                     elif current_distance_2D > 0 and current_distance_2D < 500:
-                        
                         logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
                         controller.drone.move_forward(int(current_distance_2D))
                         logging.info("Approach complete!")
@@ -307,29 +225,26 @@ def detect_and_land(controller:DroneController):
                         break
 
             elif goto_approach_sequence is True and params.NO_FLY == True: # if simulating
-                logging.info("Marker found, but not landing since not flying. Program continues.")
+                logging.info("Valid marker found! Not centering and approaching, since not flying. Program continues.")
 
             else:   #goto_approach_sequence is False
-                logging.info("Marker found, but not approaching yet.")
+                logging.info("Marker found, but not centering and approaching yet.")
 
-            controller.return_display_frame(display_frame)
-            logging.debug("RETURNING DISPLAY FRAME - MARKER FOUND")
+            controller.set_display_frame(display_frame)
 
-        elif marker_latch:  # no marker found now, but was once detected!
-            logging.info("Marker previously found, but lost. Staying put and spinning.")
+        elif marker_latch and spin_count < 20:  # no marker found now, but was once detected!
+            logging.info("Marker previously found, but lost. Staying put and spinning.")    # TODO TBC should return to main search path
             controller.marker_client.send_update(controller.markernum_lockedon, detected=False)
-            controller.return_display_frame(display_frame)
-            logging.debug("RETURNING DISPLAY FRAME - MARKER NOT FOUND, SPINNING SLOWLY")        # TODO TBC should return to main search path
+            controller.set_display_frame(display_frame)    
             controller.drone.send_rc_control(0,0,0,5)
+            spin_count += 1
             continue
         
         else:   # no marker found
             logging.info("No marker found. Proceed with search.")
-            controller.return_display_frame(display_frame)
-            logging.debug("RETURNING DISPLAY FRAME - MARKER NOT FOUND")
+            controller.set_display_frame(display_frame)
             break
-        
-
+    
     if approach_complete:
         logging.info("Landing on victim. (see utils: detect_and_land)")
         controller.drone.end()

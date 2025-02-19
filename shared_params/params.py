@@ -5,6 +5,7 @@ Please ensure all changes to subsequent CHILD paramsX.py are reflected here! Upd
 
 LAPTOP_ONLY = True   # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
 NO_FLY = True        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+IMSHOW = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
 PI_ID:int = None
 UWBTAG_ID:int = 1
@@ -53,7 +54,6 @@ NETWORK_CONFIG = get_network_config(PI_ID)    # Function defined at bottom of fi
 
 if LAPTOP_ONLY:     # just in case
     NO_FLY = True
-    PI_ID = None
-    get_network_config(PI_ID)     
+    get_network_config(None)     
 
 
