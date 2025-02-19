@@ -261,18 +261,6 @@ class MarkerClient:
         self.send_update(-1)  # Send an initial message to register with the server
         logging.info(f"Marker client {drone_id} broadcasting on {self.broadcast_ip}:{self.server_port}")
 
-    # def send_ready_signal(self):
-    #     """
-    #     TBC IF NEEDED
-    #     Notify the server that this drone is ready for takeoff.
-    #     This method is called in by the DroneController in takeoff_simul
-    #     """
-    #     self.ready = True
-    #     message = json.dumps({"drone_id": self.drone_id, "ready": True}).encode()
-    #     self.sock.sendto(message, (self.broadcast_ip, self.server_port))
-    #     logging.info(f"Sent ready signal for Drone ID {self.drone_id}")
-
-
     def send_takeoff_request(self, waiting_list:list):
         """
         Notifies the server that this drone is ready for takeoff and is waiting for the specified drones.
@@ -328,7 +316,7 @@ class MarkerClient:
 
     def is_marker_available(self, marker_id):
         marker_id = str(marker_id)  # Ensure it's a string to match dictionary keys
-        marker_data = self.marker_status.get(marker_id)
+        marker_data:dict = self.marker_status.get(marker_id)
         if marker_data is None:
             return True  # Marker has never been seen before -> Available
         detected = marker_data.get("detected", False)   # False is the default value to return if "detected" key doesn't exist. If "detected": False, also returns false.
