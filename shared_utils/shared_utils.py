@@ -1,7 +1,6 @@
-import importlib, sys, logging, os, time
+import importlib, sys, logging, os, time, cv2
 import numpy as np
 from typing import Optional
-
 
 def load_params():
     """
@@ -122,6 +121,31 @@ def capture_frame(frame_reader, max_retries:int = 3):
 
     return frame
 
+def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
+    """Draw pose estimation axes and information on frame"""
+    logging.debug(f"ID {ids} found. Drawing axes.")
+    marker_center = np.mean(corners[0], axis=0)
+    cv2.circle(frame, 
+                (int(marker_center[0]), int(marker_center[1])), 
+                10, (0, 255, 0), -1)
+    cv2.polylines(frame, 
+                [corners[0].astype(np.int32)], 
+                True, (0, 255, 0), 2)
+    cv2.putText(frame, 
+                f"ID: {ids}", 
+                (int(marker_center[0]), int(marker_center[1] - 20)),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+       
+    cv2.drawFrameAxes(
+        frame, CAMERA_MATRIX, DIST_COEFF, rvecs, tvecs, 10
+    )
+    
+    x, y, z = tvecs[0]
+    euclidean_distance = np.sqrt(x*x + y*y + z*z)
+    distance_text = f"3D Distance: {euclidean_distance:.1f} cm"
+    cv2.putText(frame, distance_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+    
+    return frame
 # Ensures variables are accessible by all scripts
 params = load_params()
 CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()

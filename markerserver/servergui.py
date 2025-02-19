@@ -5,7 +5,7 @@ Operates as a client that receives updates.
 
 import tkinter as tk
 from tkinter import ttk
-from markerserverclient import MarkerClient
+from swarmserverclient import MarkerClient
 import logging
 
 class MarkerStatusGUI:

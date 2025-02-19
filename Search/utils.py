@@ -1,6 +1,6 @@
 import time, json, logging, cv2, os, math
 import numpy as np
-from shared_utils.shared_utils import CAMERA_MATRIX, DIST_COEFF, normalize_angle, params
+from shared_utils.shared_utils import normalize_angle, params, draw_pose_axes
 from typing import List, Dict, Literal
 from shared_utils.dronecontroller2 import DroneController
 
@@ -33,32 +33,6 @@ def validate_waypoints(json_filename):
             valid = False
 
     return valid
-
-def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
-    """Draw pose estimation axes and information on frame"""
-    logging.debug(f"ID {ids} found. Drawing axes.")
-    marker_center = np.mean(corners[0], axis=0)
-    cv2.circle(frame, 
-                (int(marker_center[0]), int(marker_center[1])), 
-                10, (0, 255, 0), -1)
-    cv2.polylines(frame, 
-                [corners[0].astype(np.int32)], 
-                True, (0, 255, 0), 2)
-    cv2.putText(frame, 
-                f"ID: {ids}", 
-                (int(marker_center[0]), int(marker_center[1] - 20)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-       
-    cv2.drawFrameAxes(
-        frame, CAMERA_MATRIX, DIST_COEFF, rvecs, tvecs, 10
-    )
-    
-    x, y, z = tvecs[0]
-    euclidean_distance = np.sqrt(x*x + y*y + z*z)
-    distance_text = f"3D Distance: {euclidean_distance:.1f} cm"
-    cv2.putText(frame, distance_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    
-    return frame
 
 def scan_for_marker_bothsides(controller: DroneController, yaw_rate: int = 35, scan_deg: int = 90):
     """

@@ -61,41 +61,5 @@ def capture_frame(frame_reader, max_retries:int = 3):
 
     return frame
 
-def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
-    """Draw pose estimation axes and information on frame"""
-    logging.debug(f"ID {ids} found. Drawing axes.")
-    marker_center = np.mean(corners[0], axis=0)
-    cv2.circle(frame, 
-                (int(marker_center[0]), int(marker_center[1])), 
-                10, (0, 255, 0), -1)
-    cv2.polylines(frame, 
-                [corners[0].astype(np.int32)], 
-                True, (0, 255, 0), 2)
-    cv2.putText(frame, 
-                f"ID: {ids}", 
-                (int(marker_center[0]), int(marker_center[1] - 20)),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-       
-    cv2.drawFrameAxes(
-        frame, CAMERA_MATRIX, DIST_COEFF, rvecs, tvecs, 10
-    )
-    
-    rot_matrix = cv2.Rodrigues(rvecs)[0]
-    euler_angles = cv2.RQDecomp3x3(rot_matrix)[0]
-    x, y, z = tvecs[0]
-    roll, pitch, yaw = euler_angles
-    
-    euclidean_distance = np.sqrt(x*x + y*y + z*z)
-    
-    position_text = f"Pos (cm): X:{x:.1f} Y:{y:.1f} Z:{z:.1f}"
-    rotation_text = f"Rot (deg): R:{roll:.1f} P:{pitch:.1f} Y:{yaw:.1f}"
-    distance_text = f"3D Distance: {euclidean_distance:.1f} cm"
-    
-    cv2.putText(frame, position_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    cv2.putText(frame, rotation_text, (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    cv2.putText(frame, distance_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    
-    return frame
-
 CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
 print("Calibration parameters obtained from UnknownArea utils.")

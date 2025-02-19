@@ -44,7 +44,7 @@ def tof_update_thread(controller, Hz: float = 2):
         time.sleep(1/Hz)
         logging.debug(f"controller.forward_tof_dist: {controller.forward_tof_dist}")
 
-def navigation_thread(controller):
+def navigation_thread(controller:DroneController):
     """Main navigation thread combining depth mapping and marker detection"""
     logging.info("Starting navigation with depth mapping...")
     
@@ -105,7 +105,7 @@ def navigation_thread(controller):
                         logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
                         controller.drone.send_rc_control(0, 0, 0, 0)
                         goto_approach_sequence = True
-                        cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (250, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                        cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (500, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
 
                     elif centering_complete and marker_id != controller.markernum_lockedon:   
@@ -157,7 +157,7 @@ def navigation_thread(controller):
                         current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
                         logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
-                        cv2.putText(display_frame, "Approaching...", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
+                        cv2.putText(display_frame, "Centered. Approaching...", (100, 70), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 4)
 
                         if current_distance_2D >= 500:
                             step_dist:int = 100
@@ -206,32 +206,6 @@ def navigation_thread(controller):
 
                 elif not params.NO_FLY:
                     logging.info(f"Exit more than 3m away, no action taken.")
-
-
-                
-                ## MTD 2: TESTING "FORCE-FIELD METHOD"
-                # if controller.target_yaw is not None:
-                #     # Get current drone yaw (e.g., from IMU)
-                #     current_yaw = controller.drone.get_yaw() 
-                #     logging.debug(f"Current yaw: {current_yaw:.2f}°")
-
-                #     # Calculate shortest turn angle
-                #     delta_yaw = controller.target_yaw - current_yaw
-                #     delta_yaw = (delta_yaw + 180) % 360 - 180  # Normalize to [-180, 180]
-                    
-                #     # Turn the drone (TBC direction)
-                #     if not params.NO_FLY:
-                #         if delta_yaw > 0:
-                #             controller.drone.rotate_clockwise(int(delta_yaw))
-                #         else:
-                #             controller.drone.rotate_counter_clockwise(-int(delta_yaw))
-                #     logging.info(f"Turning {delta_yaw:.2f}° to align with exit marker")
-                    
-                #     # Reset exit state
-                #     controller.exit_detected = False
-                #     controller.target_yaw = None
-                # else:
-                #     logging.warning("Exit detected but no target yaw!")
 
             else: # Navigation logic using depth map if neither victim nor exit detected.
                   # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)

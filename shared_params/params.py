@@ -13,7 +13,7 @@ UWBTAG_ID:int = 1
 # WAYPOINTS_JSON = "waypoint_30cm.json"
 WAYPOINTS_JSON = "waypoint_big.json"
 
-
+""" TO ADD : LOAD_MIDAS, CAMERA_MATRIX """
 
 
 ### LESS COMMONLY TOUCHED PARAMS ###

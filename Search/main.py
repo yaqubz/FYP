@@ -9,7 +9,7 @@ Issues 19 Feb:
 """
 
 from shared_utils.dronecontroller2 import DroneController
-from shared_utils.shared_utils import setup_logging, params, capture_frame
+from shared_utils.shared_utils import setup_logging, params
 from .utils import *
 import cv2
 import threading
