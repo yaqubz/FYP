@@ -1,6 +1,7 @@
 """
 Run directly in terminal to open GUI for markerserver/swarmserver.
 Operates as a client that receives updates.
+Redundant caa 20 FEB
 """
 
 import tkinter as tk
