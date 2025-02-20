@@ -347,12 +347,13 @@ class MarkerClient:
         self.server_port = server_port
         self.broadcast_ip = broadcast_ip
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)  # Allow reuse of address
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)  # Enable broadcast
         self.sock.bind(("0.0.0.0", 0))  # Bind to any available port
         self.ready = False
         self.takeoff_signal = False
         
-        self.marker_status = {}         # Keeps a local copy of marker_status, to be updated by the server through the receive_updates thread
+        self.marker_status = {}  # Keeps a local copy of marker_status
         threading.Thread(target=self.receive_updates, daemon=True).start()
 
         self.send_update('marker', marker_id=-1)  # Send an initial message to register with the server
@@ -439,6 +440,16 @@ class MarkerClient:
     def get_invalid_markers(self, markers_list: list) -> list:
         return [id for id in markers_list if not self.is_marker_available(id)]
     
+    def cleanup(self):
+        """Clean up the socket when the program exits."""
+        if self.sock:
+            self.sock.close()
+            self.sock = None
+
+    def __del__(self):
+        """Destructor to ensure cleanup."""
+        self.cleanup()
+
 if __name__ == "__main__":      # Usually should not run directly?
     file_handler = logging.FileHandler("log_markerserver.log", mode='w')  # Log to a file (overwrite each run)
     console_handler = logging.StreamHandler()  # Log to the terminal

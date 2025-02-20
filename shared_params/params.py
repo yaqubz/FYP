@@ -3,17 +3,21 @@ Default params.py file; for Laptop-only simulations! This file serves as the pri
 Please ensure all changes to subsequent CHILD paramsX.py are reflected here! Updates need not be reflected in the other direction
 """
 
-LAPTOP_ONLY = True   # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY = True        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
-IMSHOW = True        # indicate IMSHOW = False to disable video stream display (program still works!)
+LAPTOP_ONLY:bool = True   # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
+NO_FLY:bool = True        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
-PI_ID:int = None
+PI_ID:int = 0   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 1
 
 # WAYPOINTS_JSON = "waypoint_30cm.json"
 WAYPOINTS_JSON = "waypoint_big.json"
 
-""" TO ADD : LOAD_MIDAS, CAMERA_MATRIX, HOVER_DELAY """
+# To implement 20 Feb
+LOAD_MIDAS:bool = False
+CAMERA_MATRIX_PATH:str = ''
+HOVER_DELAY_S:int = 3
+SIMUL_TAKEOFF_GROUP:list = []
 
 
 ### LESS COMMONLY TOUCHED PARAMS ###
@@ -27,7 +31,7 @@ LOGGING_CONFIG = {
 
 EXTRA_HEIGHT = 0   # cm; if victim is higher than ground level (especially if detecting vertical face) 
 
-def get_network_config(pi_id: int | None = None):
+def get_network_config(pi_id: int):
     """
     Returns network configuration based on pi_id.
     Args:
@@ -35,7 +39,7 @@ def get_network_config(pi_id: int | None = None):
     Returns:
         dict: Network configuration with host and port settings
     """
-    if pi_id is None or pi_id == 0:
+    if pi_id == 0:
         return {
             'host': '192.168.10.1',     # if connected directly through WiFi
             'control_port': 8889,
@@ -54,6 +58,6 @@ NETWORK_CONFIG = get_network_config(PI_ID)    # Function defined at bottom of fi
 
 if LAPTOP_ONLY:     # just in case
     NO_FLY = True
-    get_network_config(None)     
+    get_network_config(0)     
 
 

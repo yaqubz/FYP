@@ -84,7 +84,8 @@ def execute_waypoints_scan_land(dronecontroller:DroneController, waypoint_json_w
 def main():
     logger = setup_logging(params, "UnknownSearchArea")
     logger.info(f"Starting searcher server on drone {params.PI_ID} ...")
-    
+    controller = None  # KEEP THIS! To enable 'finally' 
+
     try:
         # Initialize controller
         controller = DroneController(
@@ -96,6 +97,7 @@ def main():
         )
     
         if not params.NO_FLY:
+            # controller.drone.takeoff()
             controller.takeoff_simul([11,12,13])
             logging.info("Taking off for real...")
             controller.drone.go_to_height_PID(100)
