@@ -4,13 +4,14 @@ This is to fly through RPi.
 
 LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
 NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+IMSHOW = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
 PI_ID:int = 12
 UWBTAG_ID:int = 12
 
 # WAYPOINTS_JSON = "waypoint_fwdtiny.json"
-# WAYPOINTS_JSON = 'waypoint2mfwd.json'
-WAYPOINTS_JSON = 'waypoint_turnleft.json'
+WAYPOINTS_JSON = 'waypoint2mfwd.json'
+# WAYPOINTS_JSON = 'waypoint_turnleft.json'
 
 
 

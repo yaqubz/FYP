@@ -5,6 +5,7 @@ This is to fly locally using direct connection to laptop! No RPi.
 
 LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
 NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+IMSHOW = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
 PI_ID:int = 0
 UWBTAG_ID:int = 0

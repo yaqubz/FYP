@@ -41,26 +41,26 @@ class DroneController:
 
         ## COMMENT OUT BELOW FOR TESTING
 
-        # self.drone.connect()
-        # logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
-        # self.drone.streamon()
+        self.drone.connect()
+        logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
+        self.drone.streamon()
 
-        # if not laptop_only:
-        #     # Set video stream properties to reduce latency
-        #     self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
-        #     self.drone.set_video_fps(self.drone.FPS_15)
-        #     self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
+        if not laptop_only:
+            # Set video stream properties to reduce latency
+            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
+            self.drone.set_video_fps(self.drone.FPS_15)
+            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
         
-        # # 19 FEB NEW Video Stream Properties
-        # self.frame_reader = self.drone.get_frame_read()
-        # self.current_frame = None
-        # self.display_frame = None
-        # self.frame_lock = Lock()
-        # self.stream_thread = None
-        # self.stop_event = Event()
-        # time.sleep(2)
+        # 19 FEB NEW Video Stream Properties
+        self.frame_reader = self.drone.get_frame_read()
+        self.current_frame = None
+        self.display_frame = None
+        self.frame_lock = Lock()
+        self.stream_thread = None
+        self.stop_event = Event()
+        time.sleep(2)
 
-        # self.start_video_stream(imshow=imshow)
+        self.start_video_stream(imshow=imshow)
 
         ## COMMENT OUT ABOVE FOR TESTING
 

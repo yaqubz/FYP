@@ -261,7 +261,7 @@ class MarkerServer:
             logging.debug(f"Still waiting... {round((time.time() - start_time),2)}/{timeout}s")
 
         if len(ready_drones) / len(all_waiting_drones) >= threshold:
-            logging.warning(f"{timeout}s timeout reached! {threshold*100}% or more {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Sending only these drones: {ready_drones}")
+            logging.warning(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Exceeded threshold of {threshold*100}%. Sending only these drones: {ready_drones}")
             self.send_takeoff_signal(ready_drones)
         else:
             logging.error(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Takeoff aborted.")
