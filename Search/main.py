@@ -1,9 +1,11 @@
 """
 python -m Search.main shared_params.params
 
+20 FEB WORKS GOOD ON 3 DRONES 
+
 Issues 19 Feb:
 - Drone does not end when CV2 window closes
-- Yet to test IRL
+- (minor - how to end gracefully) When landing in the middle of the search path, it still tries to finish the rest of the path 
 - update_current_pos does not work
 
 """
@@ -37,10 +39,10 @@ def execute_waypoints_scan_land(dronecontroller:DroneController, waypoint_json_w
         # Process for each waypoint: Rotate first, then move forward in a straight line. 
         # IMPT (19 Feb) - once the drone detects a marker during the scan, it cannot return to doing the search path anymore! (for now)
 
-        for wp in data['wp']:
+        for i, wp in enumerate(data['wp']):
             # Handle rotation if necessary. Scan for marker (on that side) after rotation, to see behind the drone's previous position
             dronecontroller.update_current_pos()
-            dronecontroller.status = "Orienting"
+            # dronecontroller.marker_client.send_update("status", status_message=f"Search Path Waypoint {i}: Orienting") 
             if wp['angle_deg'] != 0:
                 if wp['angle_deg'] < 0:
                     dronecontroller.drone.rotate_clockwise(int(abs(wp['angle_deg'])))
@@ -54,6 +56,7 @@ def execute_waypoints_scan_land(dronecontroller:DroneController, waypoint_json_w
             
             # Handle forward movements in (20cm, 150cm] increments
             distance = wp['dist_cm']
+            # dronecontroller.marker_client.send_update("status", status_message=f"Search Path Waypoint {i}: Moving Forward")
             while distance > 200:
                 dronecontroller.drone.move_forward(150)
                 dronecontroller.update_current_pos(distance_cm=150)
