@@ -1,1 +1,0 @@
-some_setting = "Configuration for run 1"
