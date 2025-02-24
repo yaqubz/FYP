@@ -101,7 +101,7 @@ def navigation_thread(controller:DroneController):
 
                     if controller.markernum_lockedon is None or marker_id == controller.markernum_lockedon: # first time detecting an available marker, or subsequent time detecting a marker locked on by it (but shown as no longer available)
                         controller.markernum_lockedon = marker_id
-                        controller.marker_client.send_update('marker', marker_id, detected=True) 
+                        controller.marker_client.send_update('marker', marker_id=marker_id, detected=True) 
                         logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
                         # controller.drone.send_rc_control(0, 0, 0, 0)
                         goto_approach_sequence = True
@@ -117,9 +117,9 @@ def navigation_thread(controller:DroneController):
                     
                     else:   # centering incomplete, but lost detection halfway and detected something else. Switch lock-on.
                         logging.debug(f"Switching lock-on from {controller.markernum_lockedon} to {marker_id}...")
-                        controller.marker_client.send_update('marker', controller.markernum_lockedon, detected=False) 
+                        controller.marker_client.send_update('marker', marker_id=controller.markernum_lockedon, detected=False) 
                         controller.markernum_lockedon = marker_id   # locking onto the new one
-                        controller.marker_client.send_update('marker', controller.markernum_lockedon, detected=True)
+                        controller.marker_client.send_update('marker', marker_id=controller.markernum_lockedon, detected=True)
                         goto_approach_sequence = False
 
                 else: # marker detected is NOT available
@@ -185,7 +185,7 @@ def navigation_thread(controller:DroneController):
                             logging.info("Approach complete!")
                             controller.drone.send_rc_control(0, 0, 0, 0)
                             approach_complete = True
-                            controller.marker_client.send_update('marker', marker_id, landed=True)
+                            controller.marker_client.send_update('marker', marker_id=marker_id, landed=True)
                             time.sleep(1)
                             break
 
@@ -210,10 +210,12 @@ def navigation_thread(controller:DroneController):
             else: # Navigation logic using depth map if neither victim nor exit detected.
                   # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)
                 
-                # Publish that its lost track of target. Then resets its locked_on number.
-                logging.debug(f"Nothing detected. Resetting markernum_lockedon from {controller.markernum_lockedon} to None")
-                controller.marker_client.send_update('marker', controller.markernum_lockedon, detected=False)
-                controller.markernum_lockedon = None
+                logging.debug(f"Nothing detected.")
+                
+                if not controller.markernum_lockedon is None:        # Publish that its lost track of target. Then resets its locked_on number.
+                    logging.debug(f"Nothing detected. Resetting markernum_lockedon from {controller.markernum_lockedon} to None")
+                    controller.marker_client.send_update('marker', marker_id=controller.markernum_lockedon, detected=False)
+                    controller.markernum_lockedon = None
 
                 if controller.depth_map_colors["red"]["center"] > controller.depth_map_colors["blue"]["center"]:
                     # Obstacle ahead - turn towards more open space

@@ -1,3 +1,8 @@
+"""
+Works 20 Feb
+Run directly in terminal to open GUI for swarmserver.
+"""
+
 import threading, socket, json, time
 import logging
 from typing import Dict, Set, Any, List, Literal
@@ -98,7 +103,7 @@ class MarkerServer:
                             "landed": False
                         }
 
-                    self.marker_status[marker_id]["drone_id"] = message.get("drone_id", 0)  # TESTING 19 Feb
+                    self.marker_status[marker_id]["drone_id"] = message.get("drone_id", 0)  # Registers which drone ID detected that marker
                     
                     # Update status
                     if "detected" in message:
@@ -113,6 +118,8 @@ class MarkerServer:
                     logging.debug(f"Updated marker {marker_id} status: {self.marker_status[marker_id]}")
             except Exception as e:
                 logging.error(f"Error updating marker status: {e}")
+
+        logging.info(f"Marker Statuses: {self.marker_status}")
 
     def update_drone_status(self, message):
         """
@@ -162,32 +169,36 @@ class MarkerServer:
             logging.debug(f"Current Waitlist: {self.takeoff_waitlist}")
     
     def handle_messages(self):
+        prev_message = None
         while True:
             try:
                 data, addr = self.sock.recvfrom(1024)
                 try:
                     message:dict = json.loads(data.decode())
                     logging.debug(f"Received message from {addr}: {message}")
+
+                    if message != prev_message:
                     
-                    # Handle client registration message
-                    if message.get("marker_id") == -1:
-                        if addr not in self.clients:
-                            with self.lock:
-                                self.clients.add(addr)
-                                logging.info(f"New client connected: {addr}")
-                            self.broadcast_status_to_one(addr)
-                    elif message.get("type") == 'takeoff_request' or message.get("type") == 'status':  # Drone Status Update (TODO 17 FEB for other conditions)
-                        self.update_drone_status(message)
-                    elif message.get("type") == 'marker':  # Drone Status Update (TODO 17 FEB for other conditions)
-                        self.update_marker_status(message)
-                    else:
-                        logging.warning("Invalid message format received. See handle_messages in swarmserverclient")
-                        if addr not in self.clients:
-                            with self.lock:
-                                self.clients.add(addr)
-                                logging.info(f"New client connected: {addr}")
-                            self.broadcast_status_to_one(addr)
+                        # Handle client registration message
+                        if message.get("marker_id") == -1:
+                            if addr not in self.clients:
+                                with self.lock:
+                                    self.clients.add(addr)
+                                    logging.info(f"New client connected: {addr}")
+                                self.broadcast_status_to_one(addr)
+                        elif message.get("type") == 'takeoff_request' or message.get("type") == 'status':
+                            self.update_drone_status(message)
+                        elif message.get("type") == 'marker':
+                            self.update_marker_status(message)
+                        else:
+                            logging.warning("Invalid message format received. See handle_messages in swarmserverclient")
+                            if addr not in self.clients:
+                                with self.lock:
+                                    self.clients.add(addr)
+                                    logging.info(f"New client connected: {addr}")
+                                self.broadcast_status_to_one(addr)
                     
+                    prev_message = message
                     self.broadcast_status()
                         
                 except json.JSONDecodeError:
@@ -235,10 +246,12 @@ class MarkerServer:
             # Start the GUI main loop
             self.root.mainloop()
 
-            # Keep main thread alive
-            while True:
-                time.sleep(2)
-                logging.debug("GUI closed, but server is still running...")
+            # # Keep main thread alive
+            # while True:
+            #     time.sleep(2)
+            #     logging.debug("GUI closed, but server is still running...")
+
+            logging.info("Swarm server terminated.")
         except Exception as e:
             logging.error(f"Error in server run: {e}")
 
@@ -254,7 +267,7 @@ class MarkerServer:
             status_copy = self.drone_status.copy()
             ready_drones = [d for d in all_waiting_drones if status_copy.get(d, {}).get("ready", False)]
             if set(ready_drones) == set(all_waiting_drones):
-                logging.info("All drones ready for takeoff!")
+                logging.info(f"All drones {ready_drones} ready for takeoff!")
                 self.send_takeoff_signal(ready_drones)
                 break
             time.sleep(0.5)
@@ -456,6 +469,6 @@ if __name__ == "__main__":      # Usually should not run directly?
     formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
-    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
+    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
     server = MarkerServer()
     server.run()
