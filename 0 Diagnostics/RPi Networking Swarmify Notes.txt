@@ -1,0 +1,19 @@
+TPLink WiFi Config Login (green page 192.168.0.1 i.e. Router's IP Address): SCORPION_3, uavlab2024
+Tello Login: ssh telloswarm@192.168.0.117 (PW: telloswarm)
+
+
+Use Angry IP Scanner
+arp -a: shows all devices communicated with recently
+ipconfig: shows ?
+
+sudo iwlist wlan0 scan | grep ESSID
+
+sudo nmcli device wifi connect "TELLO-ABCDEFG" password ""
+sudo nmcli device wifi connect "RMTT
+
+
+TELLO IP/UDP
+Tello IP: 192.168.10.1
+Send command: 8889
+Receive state: 8890
+Video stream: 11111
