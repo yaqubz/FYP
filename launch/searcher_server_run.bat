@@ -1,8 +1,8 @@
-start python markerserver/swarmserverclient.py
+start python swarmserver/swarmserverclient.py
 
 timeout /t 3 /nobreak
 
-@REM start python -m Search.main shared_params.params
-start python -m Search.main shared_params.params11
-start python -m Search.main shared_params.params12
-start python -m Search.main shared_params.params13
+start python -m Search.main shared_params.params
+@REM start python -m Search.main shared_params.params11
+@REM start python -m Search.main shared_params.params12
+@REM start python -m Search.main shared_params.params13

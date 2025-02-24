@@ -1,4 +1,4 @@
-start python markerserver/swarmserverclient.py
+start python swarmserver/swarmserverclient.py
 
 timeout /t 3 /nobreak
 
