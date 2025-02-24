@@ -2,23 +2,20 @@
 This is to fly through RPi.
 """
 
-LAPTOP_ONLY = False # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY = False     # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
-IMSHOW = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
-PI_ID:int = 12
+LAPTOP_ONLY:bool = False   # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
+NO_FLY:bool = False        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream display (program still works!)
+
+PI_ID:int = 12   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 12
 
-# WAYPOINTS_JSON = "waypoint_fwdtiny.json"
-WAYPOINTS_JSON = 'waypoint2mfwd.json'
-# WAYPOINTS_JSON = 'waypoint_turnleft.json'
+WAYPOINTS_JSON = "waypoint_test.json"
 
 
 
 
 ### LESS COMMONLY TOUCHED PARAMS ###
-
-EXTRA_HEIGHT = 0
 
 LOGGING_CONFIG = {
     'filename': f"log_Pi{PI_ID if PI_ID else ''}.log",
@@ -29,7 +26,7 @@ LOGGING_CONFIG = {
 
 EXTRA_HEIGHT = 0   # cm; if victim is higher than ground level (especially if detecting vertical face) 
 
-def get_network_config(pi_id: int | None = None):
+def get_network_config(pi_id: int):
     """
     Returns network configuration based on pi_id.
     Args:
@@ -37,7 +34,7 @@ def get_network_config(pi_id: int | None = None):
     Returns:
         dict: Network configuration with host and port settings
     """
-    if pi_id is None:
+    if pi_id == 0:
         return {
             'host': '192.168.10.1',     # if connected directly through WiFi
             'control_port': 8889,
@@ -46,7 +43,7 @@ def get_network_config(pi_id: int | None = None):
         }
     else:
         return {
-            'host': f'192.168.0.{pi_id+100}',
+            'host': f'192.168.0.{pi_id}',
             'control_port': 9000 + pi_id,
             'state_port': 8000 + pi_id,
             'video_port': 11100 + pi_id
@@ -56,7 +53,4 @@ NETWORK_CONFIG = get_network_config(PI_ID)    # Function defined at bottom of fi
 
 if LAPTOP_ONLY:     # just in case
     NO_FLY = True
-    PI_ID = None
-    get_network_config(PI_ID)     
-
-
+    get_network_config(0)     

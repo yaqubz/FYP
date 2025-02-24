@@ -7,8 +7,8 @@ LAPTOP_ONLY:bool = False   # indicate LAPTOP_ONLY = True to use MockTello() and 
 NO_FLY:bool = False        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
-PI_ID:int = 11   # 0 for LAPTOP_ONLY
-UWBTAG_ID:int = 11
+PI_ID:int = 3   # 0 for LAPTOP_ONLY
+UWBTAG_ID:int = 3
 
 WAYPOINTS_JSON = "waypoint_test.json"
 
@@ -54,5 +54,3 @@ NETWORK_CONFIG = get_network_config(PI_ID)    # Function defined at bottom of fi
 if LAPTOP_ONLY:     # just in case
     NO_FLY = True
     get_network_config(0)     
-
-
