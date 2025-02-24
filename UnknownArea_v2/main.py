@@ -79,7 +79,7 @@ def navigation_thread(controller:DroneController):
             controller.process_depth_color_map(depth_colormap)
             
             # Get ToF distance
-            controller.drone.send_rc_control(0, 0, 0, 0)    # stop before getting Tof reading since it takes 0.5-7 seconds to read ToF
+            # controller.drone.send_rc_control(0, 0, 0, 0)    # stop before getting Tof reading since it takes 0.5-7 seconds to read ToF
             tof_dist = controller.drone.get_ext_tof()      
             # dist = controller.forward_tof_dist    # if using tof_thread (commented out 3 Feb)
             logging.debug(f"ToF Dist: {tof_dist}")
@@ -103,7 +103,7 @@ def navigation_thread(controller:DroneController):
                         controller.markernum_lockedon = marker_id
                         controller.marker_client.send_update('marker', marker_id, detected=True) 
                         logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
-                        controller.drone.send_rc_control(0, 0, 0, 0)
+                        # controller.drone.send_rc_control(0, 0, 0, 0)
                         goto_approach_sequence = True
                         cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
 
@@ -226,12 +226,38 @@ def navigation_thread(controller:DroneController):
                         cv2.putText(display_frame, "Turning Right", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
                         logging.info("Turning Right")
                 else:
-                    # Corner condition where center appears further than sides
-                    if controller.depth_map_colors["blue"]["center"] > controller.depth_map_colors["red"]["center"] and tof_dist <= 600:
+                    if controller.depth_map_colors["blue"]["center"] > controller.depth_map_colors["red"]["center"] and tof_dist <= 700: #usually 600
                         if not params.NO_FLY:
-                            controller.drone.rotate_clockwise(135)
-                        cv2.putText(display_frame, "Avoiding Corner", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                        logging.info("Avoiding Corner")
+                            # Ensure all movement stops before attempting rotation
+                            time.sleep(1)  # Small delay to stabilize before rotating
+
+                            success = False
+                            retries = 5  # Increased retries for reliability
+
+                            for attempt in range(1, retries + 1):
+                                response = controller.drone.send_command_with_return('cw 135', timeout=3)  # Attempt rotation
+                                if response == "ok":
+                                    success = True
+                                    logging.info(f"Rotation successful on attempt {attempt}.")
+                                    break
+                                else:
+                                    logging.warning(f"Rotation attempt {attempt} failed. Retrying...")
+                                time.sleep(1)  # Small delay before retrying
+
+                            if not success:
+                                logging.warning("Rotation command failed after multiple attempts. Executing fallback maneuver.")
+                                controller.drone.move_back(30)  # Move back 30cm instead of 20cm for more clearance
+    
+                                # Secondary attempt to turn using a smaller angle as an alternative
+                                time.sleep(1)
+                                response = controller.drone.send_command_with_return('cw 90', timeout=5)
+                                if response == "ok":
+                                    logging.info("Alternative 90-degree rotation successful.")
+                                else:
+                                    logging.error("Both rotation attempts failed. Consider manual intervention or emergency stop.")
+
+                            cv2.putText(display_frame, "Avoiding Corner", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+                            logging.info("Avoiding Corner")
                     
                     elif tof_dist <= 500:   # Head-on condition
                         if not params.NO_FLY:
@@ -253,7 +279,7 @@ def navigation_thread(controller:DroneController):
             # Add labels and display combined view
             cv2.putText(combined_view, "Live Feed", (10, combined_view.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(combined_view, "Depth Map", (display_frame.shape[1] + 10, combined_view.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            cv2.imshow("Drone Navigation", combined_view)
+            cv2.imshow(f"Drone {controller.drone_id} Navigation", combined_view)
             
             # Keyboard shortcuts! (ok 14 Feb)
             key = cv2.waitKey(1)        # can print key to debug
@@ -276,15 +302,14 @@ def main():
     controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY, load_midas=True)
     try:
         if not params.NO_FLY:    
-            # controller.drone.takeoff()
+            controller.drone.takeoff()
             controller.marker_client.send_update('status', status_message='Waiting for takeoff')
-            controller.takeoff_simul([11,12])
+            # controller.takeoff_simul([11,12,15])
             logging.info("Taking off for real...")
             controller.marker_client.send_update('status', status_message='Flying')
             # controller.drone.go_to_height_PID(100)
             controller.drone.send_rc_control(0, 0, 0, 0)
-            # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
-            execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+            # execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)

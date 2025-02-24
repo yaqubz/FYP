@@ -417,7 +417,7 @@ class DroneController:
                                 True, (0, 0, 255), 2)  # Red bounding box
 
                     cv2.putText(display_frame, 
-                                f"ID: {shortest_id} Dist to {valid_marker_info["id"]}: {shortest_danger_distance:.2f}m", 
+                                f"ID: {shortest_id} Dist to {valid_marker_info['id']}: {shortest_danger_distance:.2f}m", 
                                 (marker_center[0], marker_center[1] - 20),  
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
 
