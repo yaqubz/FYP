@@ -64,8 +64,7 @@ def setup_logging(params: object, logger_name: Optional[str] = None) -> logging.
     
     return logger
 
-# TODO: move calib params into UnknownArea_v2 folder?
-def get_calibration_parameters(TELLO_NO: str = 'E920EB_480P'): # BEST VERSION 30 JAN, V2.2 (to be tested)
+def get_calibration_parameters(TELLO_NO: str = 'E920EB_480P'):
     """
     Retrieves the camera matrix and distortion coefficients for the specified Tello drone.
 
@@ -89,7 +88,7 @@ def get_calibration_parameters(TELLO_NO: str = 'E920EB_480P'): # BEST VERSION 30
     # Load calibration parameters
     camera_matrix = np.load(camera_matrix_path)
     dist_coeffs = np.load(dist_coeffs_path)
-    print(f"Calibration parameters obtained for {TELLO_NO}")
+    print(f"Calibration parameters obtained for {TELLO_NO} from shared_utils")
     return camera_matrix, dist_coeffs
 
 def normalize_angle(angle: float) -> float:
@@ -149,4 +148,3 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
 # Ensures variables are accessible by all scripts
 params = load_params()
 CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
-print("Calibration parameters obtained from shared_utils")

@@ -15,17 +15,10 @@ from PPFLY2.main import execute_waypoints
 
 from shared_utils.dronecontroller2 import DroneController
 from shared_utils.shared_utils import *
-from .utils import *
 
-import torch
 import cv2
-from cv2 import aruco
 import numpy as np
-from djitellopy import Tello
-import threading
-from threading import Lock
 import time
-import os
 
 params = load_params()
 
