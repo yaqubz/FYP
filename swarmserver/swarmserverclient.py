@@ -10,10 +10,10 @@ import tkinter as tk
 from tkinter import ttk
 
 class MarkerServer:
-    def __init__(self, host='0.0.0.0', port=5005, timeout=5):
+    def __init__(self, host='0.0.0.0', port=5005, marker_timeout=5):
         self.host = host
         self.port = port
-        self.timeout = timeout
+        self.marker_timeout = marker_timeout
         self.marker_status: Dict[str, Dict[str, Any]] = {}  # Tracks which markers are landed, detected, and by who
         self.drone_status: Dict[str, Dict[str, Any]] = {}   # Tracks which drones are ready and their waiting list
         self.takeoff_waitlist = set()
@@ -76,7 +76,7 @@ class MarkerServer:
                 with self.lock:
                     for marker_id in list(self.marker_status.keys()):
                         last_update = self.last_updates.get(marker_id, 0)
-                        if current_time - last_update > self.timeout:
+                        if current_time - last_update > self.marker_timeout:
                             if marker_id in self.marker_status and self.marker_status[marker_id].get("detected", False):
                                 logging.info(f"Clearing detected status for marker {marker_id} due to timeout")
                                 self.marker_status[marker_id]["detected"] = False
@@ -257,13 +257,13 @@ class MarkerServer:
 
     ### SIMUL TAKEOFF FUNCTIONS
 
-    def wait_and_takeoff(self, all_waiting_drones, timeout=10, threshold=0.5):
+    def wait_and_takeoff(self, all_waiting_drones, takeoff_timeout=20, threshold=0.8):
         """
         NEW FXN 17 FEB
         Waits for all drones in the waiting list to be ready before sending a takeoff signal.
         """
         start_time = time.time()
-        while time.time() - start_time < timeout:
+        while time.time() - start_time < takeoff_timeout:
             status_copy = self.drone_status.copy()
             ready_drones = [d for d in all_waiting_drones if status_copy.get(d, {}).get("ready", False)]
             if set(ready_drones) == set(all_waiting_drones):
@@ -271,13 +271,13 @@ class MarkerServer:
                 self.send_takeoff_signal(ready_drones)
                 break
             time.sleep(0.5)
-            logging.debug(f"Still waiting... {round((time.time() - start_time),2)}/{timeout}s")
+            logging.debug(f"Still waiting... {round((time.time() - start_time),2)}/{takeoff_timeout}s")
 
         if len(ready_drones) / len(all_waiting_drones) >= threshold:
-            logging.warning(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Exceeded threshold of {threshold*100}%. Sending only these drones: {ready_drones}")
+            logging.warning(f"{takeoff_timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Exceeded threshold of {threshold*100}%. Sending only these drones: {ready_drones}")
             self.send_takeoff_signal(ready_drones)
         else:
-            logging.error(f"{timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Takeoff aborted.")
+            logging.error(f"{takeoff_timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Takeoff aborted.")
 
     def send_takeoff_signal(self, ready_drones:List):
         """

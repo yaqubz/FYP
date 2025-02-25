@@ -224,10 +224,10 @@ def navigation_thread(controller:DroneController):
                     if controller.depth_map_colors["blue"]["center"] > controller.depth_map_colors["red"]["center"] and tof_dist <= 700: #usually 600
                         if not params.NO_FLY:
                             # Ensure all movement stops before attempting rotation
-                            time.sleep(1)  # Small delay to stabilize before rotating
+                            time.sleep(0.5)  # Small delay to stabilize before rotating
 
                             success = False
-                            retries = 5  # Increased retries for reliability
+                            retries = 3  # Increased retries for reliability
 
                             for attempt in range(1, retries + 1):
                                 response = controller.drone.send_command_with_return('cw 135', timeout=3)  # Attempt rotation
