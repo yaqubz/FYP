@@ -24,7 +24,7 @@ class DroneController:
     """
     def __init__(self, network_config, drone_id, laptop_only = False, load_midas = True, imshow = True):
         # Initialize Tello
-        logging.debug(f"Laptop only (bool): {laptop_only}")
+        logging.debug(f"laptop_only = {laptop_only}")
         self.drone = MockTello() if laptop_only else CustomTello(network_config)
         
         if load_midas:
@@ -58,9 +58,10 @@ class DroneController:
         self.frame_lock = Lock()
         self.stream_thread = None
         self.stop_event = Event()
+        logging.info(f"Initializing frame reader... imshow = {imshow}")
         time.sleep(2)
 
-        self.start_video_stream(imshow=imshow)
+        self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
 
         ## COMMENT OUT ABOVE FOR TESTING
 
@@ -177,6 +178,7 @@ class DroneController:
         
     def _cleanup(self):
         """Clean up resources when video stream ends"""
+        self.is_running = False
         cv2.destroyAllWindows()
         logging.info("Destroying all windows.")
         for i in range(4):
@@ -186,6 +188,7 @@ class DroneController:
         self.drone.streamoff()
         self.drone.land()
         self.drone.end()
+        sys.exit()
         
     def shutdown(self):
         """Properly shutdown the controller"""
