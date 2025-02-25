@@ -60,10 +60,11 @@ class DroneController:
         self.stop_event = Event()
         logging.info(f"Initializing frame reader... imshow = {imshow}")
         time.sleep(2)
-
         self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
-
+            
         ## COMMENT OUT ABOVE FOR TESTING
+
+        self.start_tof_thread()
 
         # Color depth map
         self.depth_map_colors = {}
@@ -90,7 +91,7 @@ class DroneController:
         self.drone_id = drone_id
         self.move_speed = 20
         self.yaw_speed = 50
-        self.forward_tof_dist = None # to be updated by subthread
+        self.forward_tof_dist = 0 # to be updated by subthread
         self.forward_tof_lock = Lock()
 
         # 18 FEB NEW Searcher Navigation Parameters
@@ -193,6 +194,7 @@ class DroneController:
     def shutdown(self):
         """Properly shutdown the controller"""
         self.stop_video_stream()
+        self.stop_tof_thread()
         self._cleanup()
 
     ## END OF NEW VIDEO 
@@ -267,7 +269,35 @@ class DroneController:
     def get_tof_distance(self):
         with self.forward_tof_lock:
             return self.forward_tof_dist
+
+    # START OF NEW TOF
+
+    def _tof_thread(self, period_s:float = 0.5):
+        """Video streaming thread function"""
+        while not self.stop_event.is_set():
+            time.sleep(period_s)
+            try:
+                with self.forward_tof_lock:
+                    self.forward_tof_dist = self.drone.get_ext_tof()
+            except Exception as e:
+                logging.error(f"Error in ToF thread: {e}")
+                time.sleep(0.1)
+                
+        self._cleanup()
+
+    def start_tof_thread(self):
+        """Start the forward ToF reading in a separate thread"""
+        self.stop_event.clear()
+        self.tof_thread = threading.Thread(target=self._tof_thread)
+        self.tof_thread.daemon = True
+        self.tof_thread.start()
         
+    def stop_tof_thread(self):
+        """Stop the forward ToF thread"""
+        self.stop_event.set()
+        if self.tof_thread and self.tof_thread.is_alive():
+            self.tof_thread.join(timeout=2)
+
     def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
         """
         TODO 19 FEB - doesnt work; can also take in an argument to set the actual current pos? inspo PPFLY2

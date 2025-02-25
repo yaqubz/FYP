@@ -174,8 +174,8 @@ def navigation_thread(controller:DroneController):
             
             # Get ToF distance
             # controller.drone.send_rc_control(0, 0, 0, 0)    # stop before getting Tof reading since it takes 0.5-7 seconds to read ToF
-            tof_dist = controller.drone.get_ext_tof()      
-            # dist = controller.forward_tof_dist    # if using tof_thread (commented out 3 Feb)
+            # tof_dist = controller.drone.get_ext_tof()      
+            tof_dist = controller.forward_tof_dist    # if using tof_thread (commented out 3 Feb)
             logging.debug(f"ToF Dist: {tof_dist}")
             cv2.putText(display_frame, f"ToF: {tof_dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
@@ -194,79 +194,81 @@ def navigation_thread(controller:DroneController):
                 
                 # PART 2: CENTERING AND APPROACH LOGIC
                 # Still work in progress caa 20 Feb. Can only be tested properly IRL
-                if goto_approach_sequence is True and not params.NO_FLY:                  
-                    logging.info(f"Locked on: {controller.markernum_lockedon}. Centering/approaching...")
-                    controller.marker_client.send_update('status', f"Locked on: {controller.markernum_lockedon}. Centering/approaching...")
-                    
-                    # Center on the marker
-                    frame_center = frame.shape[1] / 2
-                    marker_center = np.mean(corners[0], axis=0)
-                    x_error = marker_center[0] - frame_center
-                    
-                    if not centering_complete:
-                        if abs(x_error) > centering_threshold:
-                            # Calculate yaw speed based on error
-                            yaw_speed = int(np.clip(x_error / 10, -20, 20))
-                            controller.drone.send_rc_control(0, 0, 0, yaw_speed)
-                            logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
-                        else:
-                            logging.info("Marker centered! Starting approach...")
-                            controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
-                            time.sleep(0.5)  # Stabilize
-                            centering_complete = True
-                    
-                    # PART 2A: APPROACH (I.E. CENTERING COMPLETE)
-                    elif not approach_complete:
-                        current_distance_3D = controller.get_distance()
-                        if current_distance_3D is None:
-                            logging.info("Lost marker during approach...")  # should not reach here! caa 13 Feb
-                            time.sleep(0.1)
-                            continue
+                with controller.forward_tof_lock:      
+                    if goto_approach_sequence is True and not params.NO_FLY:
+                        logging.info(f"Locked on: {controller.markernum_lockedon}. Centering/approaching...")
+                        controller.marker_client.send_update('status', f"Locked on: {controller.markernum_lockedon}. Centering/approaching...")
+                        
+                        # Center on the marker
+                        frame_center = frame.shape[1] / 2
+                        marker_center = np.mean(corners[0], axis=0)
+                        x_error = marker_center[0] - frame_center
+                        
+                        if not centering_complete:
+                            if abs(x_error) > centering_threshold:
+                                # Calculate yaw speed based on error
+                                yaw_speed = int(np.clip(x_error / 10, -20, 20))
+                                controller.drone.send_rc_control(0, 0, 0, yaw_speed)
+                                logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
+                            else:
+                                logging.info("Marker centered! Starting approach...")
+                                controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
+                                time.sleep(0.5)  # Stabilize
+                                centering_complete = True
+                        
+                        # PART 2A: APPROACH (I.E. CENTERING COMPLETE)
+                        elif not approach_complete:
+                            current_distance_3D = controller.get_distance()
+                            if current_distance_3D is None:
+                                logging.info("Lost marker during approach...")  # should not reach here! caa 13 Feb
+                                time.sleep(0.1)
+                                continue
 
-                        current_height = controller.drone.get_distance_tof() - params.EXTRA_HEIGHT
-                        current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
+                            current_height = controller.drone.get_distance_tof() - params.EXTRA_HEIGHT
+                            current_distance_2D = np.sqrt(current_distance_3D**2 - current_height**2)
 
-                        logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
-                        cv2.putText(display_frame, "Centered. Approaching...", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 3)
+                            logging.info(f"3D distance to marker: {current_distance_3D:.1f}cm \n Drone height: {current_height:.1f}cm \n 2D distance to marker: {current_distance_2D:.1f}cm")
+                            cv2.putText(display_frame, "Centered. Approaching...", (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 3, (255, 255, 255), 3)
 
-                        if current_distance_2D >= 500:
-                            step_dist:int = 100
-                            logging.info(f"{current_distance_2D:.2f}cm distance too large. Stepping forward {step_dist}cm to approach marker...")
-                            # controller.drone.send_rc_control(0, 0, 0, 0)
-                            controller.drone.move_forward(step_dist)
-                            time.sleep(0.5)  # Wait for movement to complete
-                            centering_complete = False
-                            continue        # re-enter the loop; need to re-detect marker and re-measure distance. 
+                            if current_distance_2D >= 500:
+                                step_dist:int = 100
+                                logging.info(f"{current_distance_2D:.2f}cm distance too large. Stepping forward {step_dist}cm to approach marker...")
+                                # controller.drone.send_rc_control(0, 0, 0, 0)
+                                controller.drone.move_forward(step_dist)
+                                time.sleep(0.5)  # Wait for movement to complete
+                                centering_complete = False
+                                continue        # re-enter the loop; need to re-detect marker and re-measure distance. 
 
-                        elif current_distance_2D > 0 and current_distance_2D < 500:
-                            logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
-                            controller.drone.move_forward(int(current_distance_2D))
-                            logging.info("Approach complete!")
-                            controller.drone.send_rc_control(0, 0, 0, 0)
-                            approach_complete = True
-                            controller.marker_client.send_update('marker', marker_id=marker_id, landed=True)
-                            time.sleep(1)
-                            break
+                            elif current_distance_2D > 0 and current_distance_2D < 500:
+                                logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
+                                controller.drone.move_forward(int(current_distance_2D))
+                                logging.info("Approach complete!")
+                                controller.drone.send_rc_control(0, 0, 0, 0)
+                                approach_complete = True
+                                controller.marker_client.send_update('marker', marker_id=marker_id, landed=True)
+                                time.sleep(1)
+                                break
 
-                elif goto_approach_sequence is True and params.NO_FLY == True: # if simulating
-                    logging.info("Marker found, but not landing since not flying. Program continues.")
+                    elif goto_approach_sequence is True and params.NO_FLY == True: # if simulating
+                        logging.info("Marker found, but not landing since not flying. Program continues.")
 
-                else:   #goto_approach_sequence is False
-                    logging.debug("Marker found, but not approaching yet.")
-            
+                    else:   #goto_approach_sequence is False
+                        logging.debug("Marker found, but not approaching yet.")
+                
             elif controller.exit_detected: # This condition is placed after marker_detected but before depth mapping 
                 exit_text:str = f"Exit detected {controller.exit_distance_3D:.0f}cm away."
                 logging.info("No valid markers detected." + exit_text)
                 cv2.putText(display_frame, exit_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 if not params.NO_FLY and controller.exit_distance_3D < 300:
                     logging.info(f"Avoiding exit. Turning 90 degrees.")
-                    controller.drone.rotate_clockwise(90)
+                    with controller.forward_tof_lock: 
+                        controller.drone.rotate_clockwise(90)
 
                 elif not params.NO_FLY:
                     logging.info(f"Exit more than 3m away, no action taken.")
 
             else: # Navigation logic using depth map if neither victim nor exit detected.
-                  # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)
+                # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)
                 
                 logging.debug(f"Nothing detected.")
                 
@@ -274,8 +276,9 @@ def navigation_thread(controller:DroneController):
                     logging.debug(f"Resetting markernum_lockedon from {controller.markernum_lockedon} to None")
                     controller.marker_client.send_update('marker', marker_id=controller.markernum_lockedon, detected=False)
                     controller.markernum_lockedon = None
-
-                nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
+                
+                with controller.forward_tof_lock: 
+                    nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
             
             # Resize depth_colormap to match frame dimensions, create combined view side-by-side
             depth_colormap_resized = cv2.resize(depth_colormap, (display_frame.shape[1]//2, display_frame.shape[0]))

@@ -11,6 +11,9 @@ import threading
 import random
 
 class CustomTello(Tello):
+    
+    RESPONSE_TIMEOUT = 7    # Alternative: override globally here (default: 7s)
+    
     def __init__(self, network_config):
         # Store custom configuration
         self.TELLO_IP = network_config['host']
@@ -29,6 +32,10 @@ class CustomTello(Tello):
         
         # Override video port
         self.vs_udp_port = self.VS_UDP_PORT
+
+    def send_command_with_return(self, command: str, timeout: int = 5) -> str:      # send_read_command for EXT Tof should then use this timeout 
+            """Override the default parent function to change only the timeout value."""
+            return super().send_command_with_return(command, timeout=timeout)
     
     def go_to_height(self, height: int) -> None:
         """
@@ -233,8 +240,11 @@ class MockTello:
         return dist
     
     def get_ext_tof(self) -> int:
+        rand_num = np.random.beta(2, 8)  # Generates a number between 0 and 1
+        delay = 0.3 + rand_num * (7 - 0.3)  # Scale to range [0.3, 7]
         ext_dist = random.randint(500, 700)  # Simulate external ToF measurement
-        print(f"Mock: Ext ToF = {ext_dist}mm")
+        print(f"Mock: Ext ToF = {ext_dist}mm. Simulated response time {delay:.1f}s")
+        time.sleep(delay)
         return ext_dist
     
     def streamon(self):
