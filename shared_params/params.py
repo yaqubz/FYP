@@ -48,7 +48,7 @@ def get_network_config(pi_id: int):
         }
     else:
         return {
-            'host': f'192.168.0.{pi_id}',
+            'host': f'192.168.0.{100+pi_id}',
             'control_port': 9000 + pi_id,
             'state_port': 8000 + pi_id,
             'video_port': 11100 + pi_id
