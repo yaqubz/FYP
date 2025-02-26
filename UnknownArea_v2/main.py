@@ -88,9 +88,14 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
         else:
             controller.drone.send_rc_control(0, 0, 0, controller.yaw_speed)
             cv2.putText(display_frame, "Turning Right", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            logging.info("Turning Right")
+            logging.idnfo("Turning Right")
     else:
         if controller.depth_map_colors["blue"]["center"] > controller.depth_map_colors["red"]["center"] and tof_dist <= 700: #usually 600
+            cv2.putText(display_frame, "Avoiding Corner", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+            logging.info("Avoiding Corner")
+
+            # TBC TODO 26 FEB - ALWAYS AVOIDING CORNER
+
             if not params.NO_FLY:
                 time.sleep(0.5) 
                 success = False
@@ -117,9 +122,6 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
                         logging.info("Alternative 90-degree rotation successful.")
                     else:
                         logging.error("Both rotation attempts failed. Consider manual intervention or emergency stop.")
-
-                cv2.putText(display_frame, "Avoiding Corner", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-                logging.info("Avoiding Corner")
         
         elif tof_dist <= 500:   # Head-on condition
             if not params.NO_FLY:
@@ -131,6 +133,35 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
             controller.drone.send_rc_control(0, controller.move_speed, 0, 0)
             cv2.putText(display_frame, "Moving Forward", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             logging.info("Moving Forward")
+
+    return display_frame
+
+def draw_pose_axes_danger(controller:DroneController, display_frame):
+    # TBC 26 Feb - can reuse draw_pose_axes?
+    if controller.nearest_danger_id is not None:
+        controller.danger_marker_distance = controller.shortest_danger_distance
+        logging.info(f"Danger marker {controller.nearest_danger_id} detected. Distance to Marker {controller.markernum_lockedon}: {controller.shortest_danger_distance:.0f}cm. Offset (cm) = {controller.danger_offset}")
+
+        # Compute marker center
+        marker_center = tuple(map(int, np.mean(controller.nearest_danger_data["corners"][0], axis=0)))
+
+        # Draw marker annotations
+        cv2.circle(display_frame, marker_center, 10, (0, 0, 255), -1)  # Red dot for danger marker
+
+        cv2.polylines(display_frame, 
+                    [controller.nearest_danger_data["corners"].astype(np.int32)], 
+                    True, (0, 0, 255), 2)  # Red bounding box
+
+        cv2.putText(display_frame, 
+                    f"ID: {controller.nearest_danger_id} Dist to {controller.valid_marker_info['id']}: {controller.shortest_danger_distance:.0f}cm, Offset (cm): {controller.danger_offset}", 
+                    (marker_center[0], marker_center[1] - 20),  
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+
+        # Draw coordinate axes for the danger marker
+        cv2.drawFrameAxes(display_frame, CAMERA_MATRIX, DIST_COEFF, 
+                        controller.nearest_danger_data["rvecs"], 
+                        controller.nearest_danger_data["tvecs"], 
+                        10)
 
 def navigation_thread(controller:DroneController):
     """Main navigation thread combining depth mapping and marker detection"""
@@ -180,6 +211,7 @@ def navigation_thread(controller:DroneController):
             cv2.putText(display_frame, f"ToF: {tof_dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             marker_found = False
+            controller.nearest_danger_id = None
             
             # Check for markers
             marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame, display_frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
@@ -267,7 +299,7 @@ def navigation_thread(controller:DroneController):
                 elif not params.NO_FLY:
                     logging.info(f"Exit more than 3m away, no action taken.")
 
-            else: # Navigation logic using depth map if neither victim nor exit detected.
+            else: # Navigation logic using depth map if neither victim nor exit detected. Simulates well without drone
                 # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)
                 
                 logging.debug(f"Nothing detected.")
@@ -277,9 +309,13 @@ def navigation_thread(controller:DroneController):
                     controller.marker_client.send_update('marker', marker_id=controller.markernum_lockedon, detected=False)
                     controller.markernum_lockedon = None
                 
-                with controller.forward_tof_lock: 
-                    nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
+                with controller.forward_tof_lock:
+                    logging.debug(f"Executing nav_with_depthmap_tof.") 
+                    display_frame = nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
             
+            if controller.nearest_danger_id is not None:
+                draw_pose_axes_danger(controller, display_frame)
+
             # Resize depth_colormap to match frame dimensions, create combined view side-by-side
             depth_colormap_resized = cv2.resize(depth_colormap, (display_frame.shape[1]//2, display_frame.shape[0]))
             combined_view = np.hstack((display_frame, depth_colormap_resized))

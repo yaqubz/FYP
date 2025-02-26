@@ -86,6 +86,7 @@ class DroneController:
         self.exit_detected = False
         self.exit_distance_3D = None
         self.marker_positions = {}
+        self.valid_marker_info:dict = {}    # stores the data of ONE valid, locked-on marker
          
         # Navigation parameters
         self.drone_id = drone_id
@@ -102,7 +103,13 @@ class DroneController:
         self.my_start_pos:tuple = (0,0)     # CAN BE A PARAM
         self.status:str = None              # should be a property??
         
-        self.target_yaw = None      # TESTING END-JAN - for exit marker
+        self.target_yaw = None      # TESTING END-JAN - for exit marker (still testing caa 26 Feb)
+
+        # Danger Offset (26 Feb new)
+        self.shortest_danger_distance:float = float("inf")  
+        self.nearest_danger_id:int = None
+        self.nearest_danger_data:dict = None  # stores the data of ONE nearest danger marker closest to valid_marker_info
+        self.danger_offset:tuple[int] = (0,0,0)
 
         # Swarm Server/Client (17 Feb new)
         self.marker_client = MarkerClient(drone_id = drone_id)
@@ -278,7 +285,7 @@ class DroneController:
             time.sleep(period_s)
             try:
                 with self.forward_tof_lock:
-                    self.forward_tof_dist = self.drone.get_ext_tof()
+                    self.forward_tof_dist = self.drone.get_ext_tof(simulate_delay=False)
             except Exception as e:
                 logging.error(f"Error in ToF thread: {e}")
                 time.sleep(0.1)
@@ -364,9 +371,9 @@ class DroneController:
                 logging.info("Exit marker detected!")
 
             # Store first valid marker only
-            valid_marker_info = {}   # only stores ONE valid marker info
+            self.valid_marker_info = {}   # only stores ONE valid marker info
             lockedon_marker_info = {} # either stores lockedon marker info or None
-            danger_marker_info = {}  # Store all danger markers
+            danger_marker_info = {}  # stores ALL danger marker info
 
             for i, marker_id in enumerate(detected_ids):
                 rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
@@ -376,8 +383,8 @@ class DroneController:
                 euclidean_distance = np.sqrt(x*x + y*y + z*z)
 
                 if marker_id in self.valid_ids and (marker_id not in self.invalid_ids or marker_id == self.markernum_lockedon):
-                    if not valid_marker_info:  # Ensures only first valid marker is stored
-                        valid_marker_info = {
+                    if not self.valid_marker_info:  # Ensures only first valid marker is stored
+                        self.valid_marker_info = {
                             "id": int(marker_id),  # Ensure ID is a Python int
                             "position": (x, y, z),
                             "distance": euclidean_distance,
@@ -416,54 +423,33 @@ class DroneController:
                     logging.debug(f"Exit marker yaw: {self.target_yaw:.2f}°")
 
             if lockedon_marker_info:    # ie. if lockedon_marker is still detected, even if its not the first detection, discard the valid_marker in favour of locked_on marker
-                valid_marker_info = lockedon_marker_info
+                self.valid_marker_info = lockedon_marker_info
 
-            # Compute distance to the nearest danger marker (if any)
-            shortest_danger_distance = float("inf")  
-            shortest_id = None
-            closest_danger_marker = None  
 
-            if valid_marker_info:
+            # DANGER COMPONENT - TBC 26 FEB activate only when centered
+            self.shortest_danger_distance = float("inf")  
+            self.nearest_danger_id = None
+            self.nearest_danger_data = None  
+            self.danger_offset = (0,0,0)
+
+            # Compute distance of all detected danger markers to the single valid marker, then finds and save the ID and data of the nearest
+            if self.valid_marker_info and not self.nearest_danger_id:       
                 for danger_id, danger_data in danger_marker_info.items():
-                    dx = valid_marker_info["position"][0] - danger_data["position"][0]
-                    dy = valid_marker_info["position"][1] - danger_data["position"][1]
-                    dz = valid_marker_info["position"][2] - danger_data["position"][2]
+                    dx = self.valid_marker_info["position"][0] - danger_data["position"][0]
+                    dy = self.valid_marker_info["position"][1] - danger_data["position"][1]
+                    dz = self.valid_marker_info["position"][2] - danger_data["position"][2]
                     computed_distance = np.sqrt(dx*dx + dy*dy + dz*dz)
 
-                    if computed_distance < shortest_danger_distance:
-                        shortest_danger_distance = computed_distance
-                        shortest_id = danger_id
-                        closest_danger_marker = danger_data  
-
-                if shortest_id is not None:
-                    self.danger_marker_distance = shortest_danger_distance
-                    logging.info(f"Danger marker {shortest_id} detected. Distance: {shortest_danger_distance:.2f}m")
-
-                    # Compute marker center
-                    marker_center = tuple(map(int, np.mean(closest_danger_marker["corners"][0], axis=0)))
-
-                    # Draw marker annotations
-                    cv2.circle(display_frame, marker_center, 10, (0, 0, 255), -1)  # Red dot for danger marker
-
-                    cv2.polylines(display_frame, 
-                                [closest_danger_marker["corners"].astype(np.int32)], 
-                                True, (0, 0, 255), 2)  # Red bounding box
-
-                    cv2.putText(display_frame, 
-                                f"ID: {shortest_id} Dist to {valid_marker_info['id']}: {shortest_danger_distance:.2f}m", 
-                                (marker_center[0], marker_center[1] - 20),  
-                                cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-
-                    # Draw coordinate axes for the danger marker
-                    cv2.drawFrameAxes(display_frame, CAMERA_MATRIX, DIST_COEFF, 
-                                    closest_danger_marker["rvecs"], 
-                                    closest_danger_marker["tvecs"], 
-                                    10)
+                    if computed_distance < self.shortest_danger_distance:
+                        self.shortest_danger_distance = computed_distance
+                        self.nearest_danger_id = danger_id
+                        self.nearest_danger_data = danger_data
+                        self.danger_offset = (int(dx), int(dy), int(dz))  
 
             # Return the first valid marker detected
-            if valid_marker_info:
-                self.set_distance(valid_marker_info["distance"])
-                return True, valid_marker_info["corners"], valid_marker_info["id"], valid_marker_info["rvecs"], valid_marker_info["tvecs"]
+            if self.valid_marker_info:
+                self.set_distance(self.valid_marker_info["distance"])
+                return True, self.valid_marker_info["corners"], self.valid_marker_info["id"], self.valid_marker_info["rvecs"], self.valid_marker_info["tvecs"]
 
         self.set_distance(None)
         return False, None, None, None, None

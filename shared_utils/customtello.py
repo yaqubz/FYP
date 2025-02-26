@@ -135,7 +135,7 @@ class CustomTello(Tello):
             # Log progress
             logging.info(f"Current height: {current_height}cm, Error: {error}cm, Speed: {speed}")
     
-    def get_ext_tof(self) -> int:   # TBC 5 FEB should put under CustomTello instead of Controller?
+    def get_ext_tof(self) -> int:  
         """Get ToF sensor reading"""
         start_time = time.time()
         response = self.send_read_command("EXT tof?")
@@ -239,10 +239,21 @@ class MockTello:
         print(f"Mock: Downward ToF = {dist}cm")
         return dist
     
-    def get_ext_tof(self) -> int:
+    def get_ext_tof(self, simulate_delay:bool = False) -> int:
+        """
+        :args:
+        - simulate_delay:bool = Simulates real-life delay of up to 7 seconds
+        """
         rand_num = np.random.beta(2, 8)  # Generates a number between 0 and 1
         delay = 0.3 + rand_num * (7 - 0.3)  # Scale to range [0.3, 7]
-        ext_dist = random.randint(500, 700)  # Simulate external ToF measurement
+        ext_dist = random.randint(300, 700)  # Simulate external ToF measurement
+        if not simulate_delay:
+            delay = 0
+
+        if delay > 5:       # simulate invalid reading
+            delay = 7
+            ext_dist = 8888
+        
         print(f"Mock: Ext ToF = {ext_dist}mm. Simulated response time {delay:.1f}s")
         time.sleep(delay)
         return ext_dist
