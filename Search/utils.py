@@ -93,9 +93,16 @@ def detect_and_land(controller:DroneController):
     approach_complete = False
     centering_complete = False
     centering_threshold = 30    # in px
+    start_time = 0
 
     while not approach_complete:
         # Check for markers
+        next_time = time.time()
+        if start_time != 0:
+            refresh_rate = 1/(next_time-start_time)
+            logging.debug(f"Refresh rate (Hz): {refresh_rate:.1f}")     # 25 Feb tested: between 5-6 Hz regardless of detection
+        start_time = next_time
+        
         frame = controller.get_current_frame()
         display_frame = frame.copy()
         marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame, display_frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
