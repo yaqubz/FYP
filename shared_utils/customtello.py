@@ -142,11 +142,15 @@ class CustomTello(Tello):
         end_time = time.time()
         duration = end_time - start_time
         try:
-            logging.debug(f"EXT ToF response time: {duration:.2f}s")    # normally under 0.5-1s, timeout is 7s
+            logging.debug(f"get_ext_tof response time: {duration:.2f}s")    # normally under 0.5-1s, default timeout is 7s
             return int(response.split()[1])
         except ValueError or IndexError as e:    # IndexError if using threading and the response is not as intended
             logging.debug(f"EXT ToF response time: {duration:.2f}s")
             logging.debug(f"get_ext_tof raises error: {e}. Returning 8888.")    # 13 Feb seldom actually reaches here without threading?
+            return 8888
+        except:
+            logging.debug(f"EXT ToF response time: {duration:.2f}s")
+            logging.debug(f"get_ext_tof raises other error: {e}. Returning 8888.")    # 13 Feb seldom actually reaches here without threading?
             return 8888
 
 class MockFrameReader:

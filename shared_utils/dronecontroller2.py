@@ -285,7 +285,7 @@ class DroneController:
             time.sleep(period_s)
             try:
                 with self.forward_tof_lock:
-                    self.forward_tof_dist = self.drone.get_ext_tof(simulate_delay=False)
+                    self.forward_tof_dist = self.drone.get_ext_tof()
             except Exception as e:
                 logging.error(f"Error in ToF thread: {e}")
                 time.sleep(0.1)

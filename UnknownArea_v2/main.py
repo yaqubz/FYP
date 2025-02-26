@@ -1,11 +1,13 @@
 """
 (IMPT) Run in terminal from main workspace as:
 
-    python -m UnknownArea_v2.main
-    python -m UnknownArea_v2.main shared_params.params
+    python -m UnknownArea_v2.main shared_params.paramsXX
 
-TODO 11 Feb: 
-- ToF (and Streaming to some extent - fail to obtain frame) doesn't work well over RPi
+TODO 26 Feb: 
+- Improve reliability and repeatability
+- Decide whether ToF and video threads are worth it
+- Victim centering + Danger avoiding
+- Tune parameters for centering yaw etc.
 
 Takes up 23% of CPU per nav_thread. Running two nav_threads already takes up 100% CPU. (Gab's computer)
 """
@@ -79,6 +81,12 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
     First checks depth map, then ToF
     If no flags, move forward via rc control
     """
+    if tof_dist == 8888: # ToF error (while loop)
+        controller.drone.send_rc_control(0, 0, 0,0)
+        cv2.putText(display_frame, "Pausing, ToF error", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
+        logging.info("Pausing, ToF error")
+        return display_frame
+
     if controller.depth_map_colors["red"]["center"] > controller.depth_map_colors["blue"]["center"]:
         # Obstacle ahead - turn towards more open space
         if controller.depth_map_colors["blue"]["left"] > controller.depth_map_colors["blue"]["right"]:
@@ -88,9 +96,9 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
         else:
             controller.drone.send_rc_control(0, 0, 0, controller.yaw_speed)
             cv2.putText(display_frame, "Turning Right", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            logging.idnfo("Turning Right")
+            logging.info("Turning Right")
     else:
-        if controller.depth_map_colors["blue"]["center"] > controller.depth_map_colors["red"]["center"] and tof_dist <= 700: #usually 600
+        if controller.depth_map_colors["blue"]["center"] > controller.depth_map_colors["red"]["center"] and tof_dist <= 800: #OG 700
             cv2.putText(display_frame, "Avoiding Corner", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             logging.info("Avoiding Corner")
 
@@ -102,7 +110,7 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
                 retries = 3  # Increased retries for reliability
 
                 for attempt in range(1, retries + 1):
-                    response = controller.drone.send_command_with_return('cw 135', timeout=3)  # Attempt rotation
+                    response = controller.drone.send_command_with_return('cw 150', timeout=3)  # Attempt rotation (OG: 135)
                     if response == "ok":
                         success = True
                         logging.info(f"Rotation successful on attempt {attempt}.")
@@ -113,7 +121,7 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
 
                 if not success:
                     logging.warning("Rotation command failed after multiple attempts. Executing fallback maneuver.")
-                    controller.drone.move_back(30)  # Move back 30cm instead of 20cm for more clearance
+                    controller.drone.move_back(50)  # OG: 50. Move back 30cm instead of 20cm for more clearance
 
                     # Secondary attempt to turn using a smaller angle as an alternative
                     time.sleep(1)
@@ -178,14 +186,14 @@ def navigation_thread(controller:DroneController):
     # Initial movement
     logging.info("Moving to initial altitude...")
     if not params.NO_FLY:
-        controller.drone.go_to_height_PID(120)
+        controller.drone.go_to_height_PID(110)
         time.sleep(1)
     
     # Approach sequence state
     approach_complete = False
     centering_complete = False
-    centering_threshold = 30    # in px
-    start_time = 0
+    centering_threshold = 20    # in px
+    start_time = 0      # to calculate refresh rate
     
     while controller.is_running:  # Main loop continues until marker found or battery low
                 
@@ -225,7 +233,7 @@ def navigation_thread(controller:DroneController):
                 goto_approach_sequence:bool = check_marker_server_and_lockon(controller, marker_id, display_frame)
                 
                 # PART 2: CENTERING AND APPROACH LOGIC
-                # Still work in progress caa 20 Feb. Can only be tested properly IRL
+                # 26 Feb: Generally works, but reliability can be improved. E.g. Final forward XX may be executed but not acknowledged, causing it to go again.
                 with controller.forward_tof_lock:      
                     if goto_approach_sequence is True and not params.NO_FLY:
                         logging.info(f"Locked on: {controller.markernum_lockedon}. Centering/approaching...")
@@ -239,7 +247,7 @@ def navigation_thread(controller:DroneController):
                         if not centering_complete:
                             if abs(x_error) > centering_threshold:
                                 # Calculate yaw speed based on error
-                                yaw_speed = int(np.clip(x_error / 10, -20, 20))
+                                yaw_speed = int(np.clip(x_error / 4, -20, 20))  # OG: / 10
                                 controller.drone.send_rc_control(0, 0, 0, yaw_speed)
                                 logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
                             else:
@@ -272,10 +280,11 @@ def navigation_thread(controller:DroneController):
                                 continue        # re-enter the loop; need to re-detect marker and re-measure distance. 
 
                             elif current_distance_2D > 0 and current_distance_2D < 500:
-                                logging.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
+                                logging.info(f"Final Approach: Moving forward {int(current_distance_2D-30)}cm to marker.")
                                 controller.drone.move_forward(int(current_distance_2D))
                                 logging.info("Approach complete!")
                                 controller.drone.send_rc_control(0, 0, 0, 0)
+                                # 26 FEB TODO: ADD DOWNWARD FACING / DANGER AVOIDING / VICTIM CENTERING HERE
                                 approach_complete = True
                                 controller.marker_client.send_update('marker', marker_id=marker_id, landed=True)
                                 time.sleep(1)
@@ -323,15 +332,9 @@ def navigation_thread(controller:DroneController):
             # Add labels and display combined view
             cv2.putText(combined_view, "Live Feed", (10, combined_view.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
             cv2.putText(combined_view, "Depth Map", (display_frame.shape[1] + 10, combined_view.shape[0] - 20), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 255, 255), 2)
-            # cv2.imshow(f"Drone {controller.drone_id} Navigation", combined_view)      # DO NOT SHOW - already displaying in dronecontroller
             controller.set_display_frame(combined_view)
-            
-            # # Keyboard shortcuts! (ok 14 Feb)
-            # key = cv2.waitKey(1)        # can print key to debug
-            # if key == ord('q'):
-            #     break
-            # elif key == ord('l'):
-            #     logging.debug("DEBUG LOGPOINT")
+
+            # cv2.imshow(f"Drone {controller.drone_id} Navigation", combined_view)      # 26 FEB DO NOT SHOW - already displaying in dronecontroller
                 
         except Exception as e:
             logging.error(f"Error in navigation: {e}. Continuing navigation.")      # 13 Feb: "ERROR - libav.h264 - error while decoding MB 57 29, bytestream -10" does not come here
@@ -346,23 +349,19 @@ def main():
     logger.info(f"Starting unknown area main with drone_id: {params.PI_ID}")
     controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY, load_midas=True)
     try:
-        if not params.NO_FLY:    
-            controller.drone.takeoff()
-            controller.marker_client.send_update('status', status_message='Waiting for takeoff')
-            # controller.takeoff_simul([11,12,15])
-            logging.info("Taking off for real...")
-            controller.marker_client.send_update('status', status_message='Flying')
-            # controller.drone.go_to_height_PID(100)
-            controller.drone.send_rc_control(0, 0, 0, 0)
-            # execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+        if not params.NO_FLY:
+            with controller.forward_tof_lock:    
+                controller.marker_client.send_update('status', status_message='Waiting for takeoff')
+                # controller.drone.takeoff()
+                controller.takeoff_simul([11,17,18])
+                logging.info("Taking off for real...")
+                controller.marker_client.send_update('status', status_message=f'Flying at {controller.drone.get_battery()}%')
+                controller.drone.send_rc_control(0, 0, 0, 0)
+                # execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
         else:
             logging.info("Simulating takeoff. Drone will NOT fly.")
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
         time.sleep(2)
-        
-        # tof_thread = threading.Thread(target=tof_update_thread, args=(controller,2))
-        # tof_thread.daemon = True     ## Daemon threads run in the background, and are killed automatically when your program quits. 
-        # tof_thread.start()
 
         navigation_thread(controller)
 
@@ -371,9 +370,13 @@ def main():
 
     finally:
         controller.marker_client.send_update('status', status_message='Landing')
-        logging.info(f"Actually landing for real. End Battery Level: {controller.drone.get_battery()}%")
-        controller.drone.end()
-        controller.marker_client.send_update('status', status_message='Landed')
+        end_batt = controller.drone.get_battery()
+        logging.info(f"Actually landing for real. End Battery Level: {end_batt}%")
+        with controller.forward_tof_lock:
+            controller.drone.end()
+        controller.marker_client.send_update('status', status_message=f'Landed. {end_batt}%')
+        controller.is_running = False
+        controller.stop_event.set()
         cv2.destroyAllWindows()
         cv2.waitKey(1)
 
