@@ -50,7 +50,7 @@ def check_marker_server_and_lockon(controller:DroneController, marker_id:int, di
 
         if controller.markernum_lockedon is None or marker_id == controller.markernum_lockedon: # first time detecting an available marker, or subsequent time detecting a marker locked on by it (but shown as no longer available)
             controller.markernum_lockedon = marker_id
-            controller.marker_client.send_update('marker', marker_id=marker_id, detected=True) 
+            controller.marker_client.send_update('marker', marker_id=marker_id, detected=True)  # NOTE 26 Feb - this itself takes 60ms!
             logging.info(f"Locked onto {controller.markernum_lockedon}! Switching to approach sequence...")
             cv2.putText(display_frame, f"LOCKED ON: {controller.markernum_lockedon}", (10, 90), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             return True
@@ -201,7 +201,7 @@ def navigation_thread(controller:DroneController):
             next_time = time.time()
             if start_time != 0:
                 refresh_rate = 1/(next_time-start_time)
-                logging.debug(f"Refresh rate (Hz): {refresh_rate:.1f}")     # 25 Feb improvement from 1-2 Hz / 4 Hz, to 2.5 Hz / 4 Hz
+                logging.debug(f"navigation_thread refresh rate (Hz): {refresh_rate:.1f}")     # 25 Feb improvement from 1-2 Hz / 4 Hz, to 2.5 Hz / 4 Hz
             start_time = next_time
             
             frame = controller.get_current_frame()

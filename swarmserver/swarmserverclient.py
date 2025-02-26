@@ -390,15 +390,19 @@ class MarkerClient:
 
         logging.info(f"Drone {self.drone_id} is ready and waiting for {waiting_list} to takeoff together.")
     
-    def send_update(self, update_type:Literal["status","marker"], 
+    def send_update(self, 
+                    update_type:Literal["status","marker"], 
                     marker_id:int=None, detected:bool=None, landed:bool=None,
-                    status_message:str=''):
+                    status_message:str='', 
+                    send_repeat:int=3):
         """
         19 Feb - keep separate from send_takeoff_request since it has an additional waiting_list argument
 
                 message is a dictionary: 
                 {"drone_id": 1, "update_type": "marker", "marker": 2, "detected": True}
                 {"drone_id": 2, "update_type": "status", "status": "Centering"}
+
+        26 Feb - can cause significant latency! changed 5 * 0.03s = 150ms to 3 * 0.01 = 30ms
 
         """
         message:Dict = {"drone_id": self.drone_id}       # initializes the message with drone_id (client's class attribute)
@@ -416,11 +420,11 @@ class MarkerClient:
             message["status"] = status_message
 
         message_json = json.dumps(message).encode()
-        for _ in range(5):  # Send the message 5 times for reliability
+        for _ in range(send_repeat):  # Send the message N times for reliability
             self.sock.sendto(message_json, (self.broadcast_ip, self.server_port))
-            time.sleep(0.03)  # Small delay to prevent flooding
+            time.sleep(0.01)  # Small 10ms delay to prevent flooding
 
-        logging.debug(f"MarkerClient {self.drone_id} sent {message} (sent five times for reliability)")
+        logging.debug(f"MarkerClient {self.drone_id} sent {message} (sent {send_repeat} times for reliability)")
 
     def receive_updates(self):  # Background thread
         while True:
