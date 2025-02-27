@@ -10,3 +10,9 @@
 - Integrate dead reckoning + UWB waypoints from PPFLY2
 
 - Confirm ArUco size and box logistics
+
+
+27 Feb
+
+- USA V2 stream does not close properly after landing
+- USA V2 tends to overshoot victim in forward direction

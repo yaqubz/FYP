@@ -291,7 +291,7 @@ def navigation_thread(controller:DroneController):
 
                                 if controller.danger_offset and controller.shortest_danger_distance < 120:
                                     dx, dy, dz = controller.danger_offset  # Danger offset in (x, y, z)
-                                    logger.info(f"Offset measured: x: {dx}, z: {dz}")
+                                    logger.info(f"Offset measured: x: {dx}, z: {dz} (Victim - Danger, in cv2 coordinates)")
                                     ## NOTE: TELLO XYZ is: x +ve forward, y +ve left, z +ve up
                                     ## NOTE: CV2 XYZ is x +ve right, y +ve down, z +ve forward
 
@@ -300,15 +300,16 @@ def navigation_thread(controller:DroneController):
                                     
                                     if danger_distance > 0:  # Avoid division by zero
                                         scale_factor = 50 / danger_distance  # Inverse relationship ensures smaller danger distance results in larger scale factor
-                                        tello_offset_y = np.clip(dx * scale_factor, -50, 50)  # Move away from danger in cv2's x = Tello's -y
-                                        tello_offset_x = np.clip(-dz * scale_factor, -50, 50)  # Move away from danger in cv2's z = Tello's x
+                                        logging.info(f"Movement before clipping: x={dx * scale_factor} cm, y={-dz * scale_factor:.1f} cm")
+                                        tello_offset_y = np.clip(-dx * scale_factor, -75, 75)  # Move away from danger in cv2's x = Tello's -y
+                                        tello_offset_x = np.clip(dz * scale_factor, -75, 75)  # Move away from danger in cv2's z = Tello's x
                                     else:
                                         tello_offset_x, tello_offset_y = 0, 0  # No movement if danger distance is 0
 
                                     logging.info(f"Moving drone by offset: x={tello_offset_x:.1f} cm, y={tello_offset_y:.1f} cm")
 
                                     # Move the drone safely using go_xyz_speed
-                                    controller.drone.go_xyz_speed(-int(tello_offset_x), -int(tello_offset_y), 0, 20)  # y=0 since we're on the floor
+                                    controller.drone.go_xyz_speed(int(tello_offset_x), int(tello_offset_y), 0, 20)  # y=0 since we're on the floor
                                     time.sleep(2)  # Wait for the movement to complete
 
                                 approach_complete = True

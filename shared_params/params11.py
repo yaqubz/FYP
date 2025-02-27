@@ -4,7 +4,7 @@ This is to fly through RPi.
 
 
 LAPTOP_ONLY:bool = False   # indicate LAPTOP_ONLY = True to use MockTello() and laptop webcam instead
-NO_FLY:bool = True        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
+NO_FLY:bool = False        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
 PI_ID:int = 11   # 0 for LAPTOP_ONLY
