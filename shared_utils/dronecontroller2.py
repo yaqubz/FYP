@@ -354,7 +354,6 @@ class DroneController:
 
         # Reset class attributes, for re-detection
         self.target_yaw = None
-        self.danger_marker_distance = None 
         self.exit_detected = False
         self.exit_distance_3D = None 
 
