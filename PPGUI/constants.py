@@ -2,10 +2,12 @@
 Import Hierarchy: constants -> config -> utils -> main
 EVERYTHING HERE CAN BE ADJUSTED!
 """
-BGPIC = "resources/field2025_toscale.PNG"
+# BGPIC = "resources/field2025_toscale.PNG"
+BGPIC = "resources/blank.jpeg"
 
 # Scaling Coeffs
-ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space
+# ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space
+ACTUAL_HEIGHT, ACTUAL_WIDTH = 1500, 1500  # cm of actual space
 # ACTUAL_HEIGHT, ACTUAL_WIDTH = 600, 600  # cm of actual space
 WIDTH_HEIGHT_RATIO = ACTUAL_WIDTH/ACTUAL_HEIGHT
 

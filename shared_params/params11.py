@@ -10,7 +10,7 @@ IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream disp
 PI_ID:int = 11   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 11
 
-WAYPOINTS_JSON = "waypoint_test.json"
+WAYPOINTS_JSON = "waypoint_USA3.json"
 
 
 

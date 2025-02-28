@@ -33,7 +33,7 @@ class CustomTello(Tello):
         # Override video port
         self.vs_udp_port = self.VS_UDP_PORT
 
-    def send_command_with_return(self, command: str, timeout: int = 5) -> str:      # send_read_command for EXT Tof should then use this timeout 
+    def send_command_with_return(self, command: str, timeout: int = 1) -> str:      # send_read_command for EXT Tof should then use this timeout. OG: 7
             """Override the default parent function to change only the timeout value."""
             return super().send_command_with_return(command, timeout=timeout)
     

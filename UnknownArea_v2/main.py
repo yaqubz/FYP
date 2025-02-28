@@ -187,14 +187,14 @@ def navigation_thread(controller:DroneController):
     logger.info("Moving to initial altitude...")
     if not params.NO_FLY:
         with controller.forward_tof_lock:
-            # controller.drone.go_to_height_PID(110) # COMMENTED OUT 27 FEB - waste time?
-            controller.drone.move_up(20)
+            controller.drone.go_to_height_PID(120) # COMMENTED OUT 27 FEB - waste time?
+            # controller.drone.move_up(20)
         time.sleep(1)
     
     # Approach sequence state
     approach_complete = False
     centering_complete = False
-    centering_threshold = 20    # in px
+    centering_threshold = 15    # in px
     start_time = 0      # to calculate refresh rate
     
     while controller.is_running:  # Main loop continues until marker found or battery low
@@ -254,7 +254,7 @@ def navigation_thread(controller:DroneController):
                                 controller.drone.send_rc_control(0, 0, 0, yaw_speed)
                                 logger.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
                             else:
-                                logger.info("Marker centered! Starting approach...")
+                                logger.info(f"Marker centered, x error = {x_error:.0f}px! Starting approach...")
                                 controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
                                 time.sleep(0.5)  # Stabilize
                                 centering_complete = True
@@ -300,9 +300,10 @@ def navigation_thread(controller:DroneController):
                                     
                                     if danger_distance > 0:  # Avoid division by zero
                                         scale_factor = 50 / danger_distance  # Inverse relationship ensures smaller danger distance results in larger scale factor
-                                        logging.info(f"Movement before clipping: x={dx * scale_factor} cm, y={-dz * scale_factor:.1f} cm")
-                                        tello_offset_y = np.clip(-dx * scale_factor, -75, 75)  # Move away from danger in cv2's x = Tello's -y
+                                        logging.info(f"Movement before clipping: x={dz * scale_factor:.1f} cm, y={-dx * scale_factor} cm")
                                         tello_offset_x = np.clip(dz * scale_factor, -75, 75)  # Move away from danger in cv2's z = Tello's x
+                                        tello_offset_y = np.clip(-dx * scale_factor, -75, 75)  # Move away from danger in cv2's x = Tello's -y
+                                        
                                     else:
                                         tello_offset_x, tello_offset_y = 0, 0  # No movement if danger distance is 0
 
@@ -380,11 +381,11 @@ def main():
             with controller.forward_tof_lock:    
                 controller.marker_client.send_update('status', status_message='Waiting for takeoff')
                 controller.drone.takeoff()
-                # controller.takeoff_simul([11,13])
+                # controller.takeoff_simul([11,17])
                 logger.info("Taking off for real...")
                 controller.marker_client.send_update('status', status_message=f'Flying at {controller.drone.get_battery()}%')
                 controller.drone.send_rc_control(0, 0, 0, 0)
-                # execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+                execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
         else:
             logger.info("Simulating takeoff. Drone will NOT fly.")
             # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)

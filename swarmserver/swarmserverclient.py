@@ -257,7 +257,7 @@ class MarkerServer:
 
     ### SIMUL TAKEOFF FUNCTIONS
 
-    def wait_and_takeoff(self, all_waiting_drones, takeoff_timeout=20, threshold=0.8):
+    def wait_and_takeoff(self, all_waiting_drones, takeoff_timeout=30, threshold=0.8):
         """
         NEW FXN 17 FEB
         Waits for all drones in the waiting list to be ready before sending a takeoff signal.
@@ -473,6 +473,6 @@ if __name__ == "__main__":      # Usually should not run directly?
     formatter = logging.Formatter("%(levelname)s - %(asctime)s - %(message)s")
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
-    logging.basicConfig(level=logging.INFO, handlers=[file_handler, console_handler])
+    logging.basicConfig(level=logging.DEBUG, handlers=[file_handler, console_handler])
     server = MarkerServer()
     server.run()
