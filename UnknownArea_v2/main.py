@@ -24,21 +24,6 @@ import time
 
 params = load_params()
 
-def tof_update_thread(controller:DroneController, Hz: float = 2):
-    """
-    TBC not exactly working, 6 Feb
-    Subthread for updating forward ToF reading
-    Implemented 3 Feb, works but may block other responses from drone
-    May work better with RPi? 
-    Possible solution: Find optimal refresh rate? Use both subthread AND main thread?
-    
-    """
-    while True:
-        with controller.forward_tof_lock:
-            controller.forward_tof_dist = controller.drone.get_ext_tof()
-        time.sleep(1/Hz)
-        logger.debug(f"controller.forward_tof_dist: {controller.forward_tof_dist}")
-
 def check_marker_server_and_lockon(controller:DroneController, marker_id:int, display_frame) -> bool:
     """
     Logic discussed and settled between Yaqub and Gab
@@ -120,16 +105,16 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
                     time.sleep(1)  # Small delay before retrying
 
                 if not success:
-                    logger.warning("Rotation command failed after multiple attempts. Executing fallback maneuver.")
-                    controller.drone.move_back(50)  # OG: 50. Move back 30cm instead of 20cm for more clearance
+                    logger.warning("Rotation command failed after multiple attempts. Executing recovery maneuver.")
+                    execute_recovery(controller)        # YAQUB NEW 1 MAR 
 
-                    # Secondary attempt to turn using a smaller angle as an alternative
-                    time.sleep(1)
-                    response = controller.drone.send_command_with_return('cw 90', timeout=5)
-                    if response == "ok":
-                        logger.info("Alternative 90-degree rotation successful.")
-                    else:
-                        logger.error("Both rotation attempts failed. Consider manual intervention or emergency stop.")
+                    # # Secondary attempt to turn using a smaller angle as an alternative
+                    # time.sleep(1)
+                    # response = controller.drone.send_command_with_return('cw 90', timeout=5)
+                    # if response == "ok":
+                    #     logger.info("Alternative 90-degree rotation successful.")
+                    # else:
+                    #     logger.error("Both rotation attempts failed. Consider manual intervention or emergency stop.")
         
         elif tof_dist <= 500:   # Head-on condition
             if not params.NO_FLY:
@@ -170,6 +155,34 @@ def draw_pose_axes_danger(controller:DroneController, display_frame):
                         controller.nearest_danger_data["rvecs"], 
                         controller.nearest_danger_data["tvecs"], 
                         10)
+        
+def execute_recovery(controller = DroneController):
+        """
+        Attempts to recover the drone's movement if it's stuck.
+        Tries moving back, then left, then right.
+        If all attempts fail, retries from the beginning.
+        """
+        while True: 
+            recovery_moves = [
+                ("back", controller.drone.move_back, 30),
+                ("left", controller.drone.move_left, 30),
+                ("right", controller.drone.move_right, 30),
+                ("clockwise", controller.drone.rotate_clockwise, 135),
+                ("counter-clockwise", controller.drone.rotate_counter_clockwise, 135)
+            ]
+
+            for direction, move_command, distance in recovery_moves:
+                try:
+                    logging.info(f"Attempting recovery: Moving {direction} {distance}cm")
+                    move_command(distance)  # Execute the movement command
+                    logging.info(f"Recovery successful: Moved {direction} {distance}cm")
+                    return  # Exit if successful
+                except Exception as e:
+                    logging.warning(f"Recovery attempt failed: Could not move {direction} - {e}")
+
+                time.sleep(1)  # Small delay before next attempt
+                
+            logging.error("All recovery attempts failed. Restarting recovery process.")
 
 def navigation_thread(controller:DroneController):
     """Main navigation thread combining depth mapping and marker detection"""
@@ -187,7 +200,7 @@ def navigation_thread(controller:DroneController):
     logger.info("Moving to initial altitude...")
     if not params.NO_FLY:
         with controller.forward_tof_lock:
-            controller.drone.go_to_height_PID(120) # COMMENTED OUT 27 FEB - waste time?
+            controller.drone.go_to_height_PID(params.FLIGHT_HEIGHT) # COMMENTED OUT 27 FEB - waste time?
             # controller.drone.move_up(20)
         time.sleep(1)
     
@@ -200,24 +213,17 @@ def navigation_thread(controller:DroneController):
     while controller.is_running:  # Main loop continues until marker found or battery low
                 
         try:
-            next_time = time.time()
-            if start_time != 0:
-                refresh_rate = 1/(next_time-start_time)
-                logger.debug(f"navigation_thread refresh rate (Hz): {refresh_rate:.1f}")     # 25 Feb improvement from 1-2 Hz / 4 Hz, to 2.5 Hz / 4 Hz
-            start_time = next_time
+            start_time = log_refresh_rate(start_time, 'navigation_thread')
             
             frame = controller.get_current_frame()
             display_frame = frame.copy()
+
+            controller.depth_colormap = controller.generate_color_depth_map(frame)
+            controller.process_depth_color_map(controller.depth_colormap)
             
-            # Get depth color map
-            depth_colormap = controller.generate_color_depth_map(frame) # TBC 6 Feb can shift under "else" since no need to generate when markers found (10 Feb Ans: Not if you want to visualize)
-            controller.process_depth_color_map(depth_colormap)
-            
-            # Get ToF distance
-            # controller.drone.send_rc_control(0, 0, 0, 0)    # stop before getting Tof reading since it takes 0.5-7 seconds to read ToF
-            # tof_dist = controller.drone.get_ext_tof()      
-            tof_dist = controller.forward_tof_dist    # if using tof_thread (commented out 3 Feb)
-            logger.debug(f"ToF Dist: {tof_dist}")
+            # Get latest ToF distance from the thread 
+            tof_dist = controller.forward_tof_dist
+            logger.info(f"ToF Dist: {tof_dist}")
             cv2.putText(display_frame, f"ToF: {tof_dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
             marker_found = False
@@ -349,12 +355,11 @@ def navigation_thread(controller:DroneController):
                 with controller.forward_tof_lock:
                     logger.debug(f"Executing nav_with_depthmap_tof.") 
                     display_frame = nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
-            
             if controller.nearest_danger_id is not None:
                 draw_pose_axes_danger(controller, display_frame)
 
             # Resize depth_colormap to match frame dimensions, create combined view side-by-side
-            depth_colormap_resized = cv2.resize(depth_colormap, (display_frame.shape[1]//2, display_frame.shape[0]))
+            depth_colormap_resized = cv2.resize(controller.depth_colormap, (display_frame.shape[1]//2, display_frame.shape[0]))
             combined_view = np.hstack((display_frame, depth_colormap_resized))
             
             # Add labels and display combined view
@@ -385,6 +390,7 @@ def main():
                 logger.info("Taking off for real...")
                 controller.marker_client.send_update('status', status_message=f'Flying at {controller.drone.get_battery()}%')
                 controller.drone.send_rc_control(0, 0, 0, 0)
+                time.sleep(params.TAKEOFF_HOVER_DELAY)
                 execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
         else:
             logger.info("Simulating takeoff. Drone will NOT fly.")

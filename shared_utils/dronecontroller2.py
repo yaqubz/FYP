@@ -39,11 +39,17 @@ class DroneController:
             midas_transforms = torch.hub.load("intel-isl/MiDaS", "transforms")
             self.transform = midas_transforms.small_transform
 
+        # Initialize Swarm Client
+        self.marker_client = MarkerClient(drone_id = drone_id)
+
         ## COMMENT OUT BELOW FOR TESTING
 
         self.drone.connect()
-        logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
+        self.drone.streamoff()
         self.drone.streamon()
+        start_batt = self.drone.get_battery()
+        self.marker_client.send_update("status", status_message=f'Start Battery: {start_batt}%')
+        
 
         if not laptop_only:
             # Set video stream properties to reduce latency
@@ -58,7 +64,7 @@ class DroneController:
         self.frame_lock = Lock()
         self.stream_thread = None
         self.stop_event = Event()
-        logging.info(f"Initializing frame reader... imshow = {imshow}")
+        logging.info(f"Start Battery: {start_batt}%. Initializing frame reader... imshow = {imshow}")
         time.sleep(2)
         self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
             
@@ -67,6 +73,7 @@ class DroneController:
         self.start_tof_thread()
 
         # Color depth map
+        self.depth_colormap = None
         self.depth_map_colors = {}
         
         # Controller state
@@ -111,9 +118,6 @@ class DroneController:
         self.nearest_danger_data:dict = None  # stores the data of ONE nearest danger marker closest to valid_marker_info
         self.danger_offset:tuple[int] = (0,0,0)
 
-        # Swarm Server/Client (17 Feb new)
-        self.marker_client = MarkerClient(drone_id = drone_id)
-
     # 19 FEB NEW VIDEO HANDLING
 
     def start_video_stream(self, imshow:bool = True):
@@ -146,8 +150,11 @@ class DroneController:
             
     def _stream_video(self, imshow:bool = True):
         """Video streaming thread function"""
+        start_time = 0
         while not self.stop_event.is_set():
             try:
+                # start_time = log_refresh_rate(start_time, '_stream_video')
+
                 # Capture new frame
                 frame = capture_frame(self.frame_reader)
                 if frame is None:
@@ -157,6 +164,10 @@ class DroneController:
                 with self.frame_lock:
                     self.current_frame = frame.copy()
                 
+                ## COMMENTED OUT 1 MAR - too much unnecessary processing!
+                # self.depth_colormap = self.generate_color_depth_map(frame) # TBC 6 Feb can shift under "else" since no need to generate when markers found (10 Feb Ans: Not if you want to visualize)
+                # self.process_depth_color_map(self.depth_colormap)
+
                 # Display the frame
                 display_frame = self.get_display_frame()
                 if display_frame is not None and imshow:
@@ -217,7 +228,8 @@ class DroneController:
         self.drone.takeoff()
 
     def generate_color_depth_map(self, frame):
-        """Process frame through MiDaS to get depth map"""
+        """Process frame through MiDaS to get depth map. Each frame takes about 0.15-0.30 seconds (Gab tested 1 Mar)"""
+        # start_time = time.time()
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         input_batch = self.transform(frame_rgb).to(self.device)
         
@@ -226,6 +238,8 @@ class DroneController:
             
         depth_map = prediction.squeeze().cpu().numpy()
         depth_map = cv2.normalize(depth_map, None, 0, 1, norm_type=cv2.NORM_MINMAX)
+        # duration = time.time() - start_time
+        # logging.debug(f"generate_color_depth_map took: {duration:.2f}s")
         return cv2.applyColorMap((depth_map * 255).astype(np.uint8), cv2.COLORMAP_JET)
         
     def process_depth_color_map(self, depth_colormap):

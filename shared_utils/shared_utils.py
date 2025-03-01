@@ -145,6 +145,24 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
     cv2.putText(frame, distance_text, (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
     
     return frame
+
+
+def log_refresh_rate(start_time:float, loop_name:str):
+    """
+    Boilerplate for logging refresh rate. Need to create start_time = 0 first
+    
+    e.g.
+    start_time = 0
+    while True:
+        start_time = log_refresh_rate(start_time, 'loop_name')
+        ...
+    """
+    next_time = time.time()
+    if start_time != 0:
+        refresh_rate = 1/(next_time-start_time)
+        logging.debug(f"{loop_name} refresh rate (Hz): {refresh_rate:.1f}")
+    return next_time
+
 # Ensures variables are accessible by all scripts
 params = load_params()
 CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()

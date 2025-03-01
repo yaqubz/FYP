@@ -13,6 +13,9 @@ UWBTAG_ID:int = 0
 # WAYPOINTS_JSON = "waypoint_30cm.json"
 WAYPOINTS_JSON = "waypoint_test.json"
 
+FLIGHT_HEIGHT:int = 120
+TAKEOFF_HOVER_DELAY:int = 0
+
 # To implement 20 Feb
 LOAD_MIDAS:bool = False
 CAMERA_MATRIX_PATH:str = ''

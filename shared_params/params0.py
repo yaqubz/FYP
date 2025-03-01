@@ -12,7 +12,8 @@ UWBTAG_ID:int = 0
 
 WAYPOINTS_JSON = "waypoint_test.json"
 
-
+FLIGHT_HEIGHT:int = 120
+TAKEOFF_HOVER_DELAY:int = 0
 
 
 ### LESS COMMONLY TOUCHED PARAMS ###
