@@ -15,6 +15,7 @@ from tkinter import simpledialog
 
 """
     python -m UWBViz.main
+    NOTE: To apply UWB offset (i.e. when UWB origin not at map 0,0), see UWB_ReadUDP
 """
 
 # Add workspace root to sys.path (9 Jan: Works but might need a better solution)

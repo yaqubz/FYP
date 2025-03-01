@@ -40,6 +40,7 @@ From example_copy6.c:
 
 # Define constants
 PERIOD_S = 0.1
+UWB_OFFSET: tuple[float] = (1, 1)       # describes the UWB's offset from actual (0,0) at bottom left
 
 def parse_data_to_df(data):
     """
@@ -59,8 +60,8 @@ def parse_data_to_df(data):
                 row = {
                     'id': int(values[0]),
                     'role': int(values[1]),
-                    'x': float(values[2]),
-                    'y': float(values[3]),
+                    'x': float(values[2]) + UWB_OFFSET[0],
+                    'y': float(values[3]) + UWB_OFFSET[1],
                     'z': float(values[4]),
                     'dist1': float(values[5]),
                     'dist2': float(values[6]),
@@ -113,7 +114,7 @@ def get_target_position(target_id, max_retries=3, timeout=0.1):
                 node_id = int(parts[0])
                 if node_id == target_id:
                     GOT_POS = True
-                    pos = (float(parts[2]), float(parts[3]), float(parts[4]))
+                    pos = (float(parts[2])+UWB_OFFSET[0] , float(parts[3])+UWB_OFFSET[1], float(parts[4]))
                     print(f"Target {target_id}: {pos}")
                     sock.close()
                     return pos

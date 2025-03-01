@@ -384,9 +384,9 @@ class MarkerClient:
         }
         message_json = json.dumps(message).encode()
 
-        for _ in range(5):  # Send the message 5 times for reliability
+        for _ in range(3):  # Send the message 5 times for reliability
             self.sock.sendto(message_json, (self.broadcast_ip, self.server_port))
-            time.sleep(0.03)  # Small delay to prevent flooding
+            time.sleep(0.01)  # Small delay to prevent flooding
 
         logging.info(f"Drone {self.drone_id} is ready and waiting for {waiting_list} to takeoff together.")
     
