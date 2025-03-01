@@ -136,7 +136,7 @@ def draw_pose_axes(frame, corners, ids, rvecs, tvecs):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
        
     cv2.drawFrameAxes(
-        frame, CAMERA_MATRIX, DIST_COEFF, rvecs, tvecs, 10
+        frame, params.CAMERA_MATRIX, params.DIST_COEFF, rvecs, tvecs, 10
     )
     
     x, y, z = tvecs[0]
@@ -165,4 +165,9 @@ def log_refresh_rate(start_time:float, loop_name:str):
 
 # Ensures variables are accessible by all scripts
 params = load_params()
-CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
+
+try:
+    CAMERA_MATRIX, DIST_COEFF = get_calibration_parameters()
+
+except:
+    logging.error("Camera Matrix and Dist Coeff not obtained from file.")

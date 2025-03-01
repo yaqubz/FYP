@@ -10,7 +10,6 @@ IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream disp
 PI_ID:int = 0   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 0
 
-# WAYPOINTS_JSON = "waypoint_30cm.json"
 WAYPOINTS_JSON = "waypoint_test.json"
 
 FLIGHT_HEIGHT:int = 120
@@ -18,12 +17,21 @@ TAKEOFF_HOVER_DELAY:int = 0
 
 # To implement 20 Feb
 LOAD_MIDAS:bool = False
-CAMERA_MATRIX_PATH:str = ''
-HOVER_DELAY_S:int = 3
 SIMUL_TAKEOFF_GROUP:list = []
 
 
+
+
 ### LESS COMMONLY TOUCHED PARAMS ###
+
+import numpy as np
+
+# CAMERA MATRIX + DIST COEFF (480P)
+CAMERA_MATRIX: np.ndarray = np.array([[472.23497738,   0.,         314.44428497],
+                                      [  0.,         471.39817591, 226.70646477],
+                                      [  0.,           0.,           1.        ]])
+
+DIST_COEFF: np.ndarray = np.array([[ 0.03218703,  0.17998838,  0.00076689, -0.0075065,  -0.28000622]])
 
 LOGGING_CONFIG = {
     'filename': f"log_Pi{PI_ID if PI_ID else ''}.log",

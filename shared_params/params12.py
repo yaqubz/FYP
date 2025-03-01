@@ -18,6 +18,15 @@ TAKEOFF_HOVER_DELAY:int = 0
 
 ### LESS COMMONLY TOUCHED PARAMS ###
 
+import numpy as np
+
+# CAMERA MATRIX + DIST COEFF (480P)
+CAMERA_MATRIX: np.ndarray = np.array([[472.23497738,   0.,         314.44428497],
+                                      [  0.,         471.39817591, 226.70646477],
+                                      [  0.,           0.,           1.        ]])
+
+DIST_COEFF: np.ndarray = np.array([[ 0.03218703,  0.17998838,  0.00076689, -0.0075065,  -0.28000622]])
+
 LOGGING_CONFIG = {
     'filename': f"log_Pi{PI_ID if PI_ID else ''}.log",
     'level': "DEBUG",  # Change this to "INFO", "WARNING", etc.

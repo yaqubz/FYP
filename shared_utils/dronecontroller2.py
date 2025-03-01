@@ -66,11 +66,13 @@ class DroneController:
         self.stop_event = Event()
         logging.info(f"Start Battery: {start_batt}%. Initializing frame reader... imshow = {imshow}")
         time.sleep(2)
-        self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
+        
             
         ## COMMENT OUT ABOVE FOR TESTING ------------------------------------
 
-        self.start_tof_thread()
+        ## Call these two in the main() to avoid unnecessary streaming before takeoff 
+        # self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
+        # self.start_tof_thread()
 
         # Color depth map
         self.depth_colormap = None
@@ -130,7 +132,7 @@ class DroneController:
         self.drone.end()
         self.marker_client.land_signal = False  # Reset the flag
     
-    # 19 FEB NEW VIDEO HANDLING
+    # SECTION: VIDEO HANDLING
 
     def start_video_stream(self, imshow:bool = True):
         """Start the video streaming in a separate thread"""
@@ -142,9 +144,12 @@ class DroneController:
     def stop_video_stream(self):
         """Stop the video streaming thread"""
         self.stop_event.set()
-        if self.stream_thread and self.stream_thread.is_alive():
-            self.stream_thread.join(timeout=2)
-            
+        try:
+            if self.stream_thread and self.stream_thread.is_alive():
+                self.stream_thread.join(timeout=2)
+        except Exception as e:
+            logging.error(f"Error in stopping video stream: {e}")
+
     def get_current_frame(self):
         """Thread-safe method to get the latest frame. External method."""
         with self.frame_lock:
@@ -163,28 +168,23 @@ class DroneController:
     def _stream_video(self, imshow:bool = True):
         """Video streaming thread function"""
         start_time = 0
+        logging.info("_stream_video started.")
         while not self.stop_event.is_set():
             try:
-                # if self.marker_client.land_signal:  # TBC: checks land signal from GUI to Client
-                #     logging.debug("RECEIVED LAND SIGNAL")
-                #     self.shutdown()
-                #     self.drone.end()
-                #     break
-
-                # start_time = log_refresh_rate(start_time, '_stream_video')
+                # start_time = log_refresh_rate(start_time, '_stream_video')        # comment out to log refresh rate!
 
                 # Capture new frame
                 frame = capture_frame(self.frame_reader)
                 if frame is None:
+                    logging.error("_stream_video: Empty frame received. Trying again.")
+                    self.empty_frame_received = True
                     continue
-                    
+
+                self.empty_frame_received = False
+
                 # Store frame thread-safely
                 with self.frame_lock:
                     self.current_frame = frame.copy()
-                
-                ## COMMENTED OUT 1 MAR - too much unnecessary processing!
-                # self.depth_colormap = self.generate_color_depth_map(frame) # TBC 6 Feb can shift under "else" since no need to generate when markers found (10 Feb Ans: Not if you want to visualize)
-                # self.process_depth_color_map(self.depth_colormap)
 
                 # Display the frame
                 display_frame = self.get_display_frame()
@@ -206,54 +206,81 @@ class DroneController:
             except Exception as e:
                 logging.error(f"Error in video stream: {e}")
                 time.sleep(0.1)
-                
-        self._cleanup()
-            
-
-    # def _monitor_land_signal(self):
-    #     """
-    #       NOT USING - trying callback instead
-    #     Monitors the land_signal flag in the MarkerClient and lands the drone if the flag is set.
-    #     """
-    #     while not self.stop_event.is_set():
-    #         if self.marker_client.land_signal:
-    #             logging.info(f"Land signal received for Tello {self.drone_id}. Landing...")
-    #             self.shutdown()
-    #             self.drone.end()
-    #             self.marker_client.land_signal = False
-    #             break
-            
-    #     time.sleep(0.1)  # Check every 100ms
+        logging.info("_stream_video exited.")        
+        # self._cleanup()
+        self.shutdown()
 
     def handle_key_command(self, key):
         """Handle keyboard commands - can be overridden by subclasses"""
         pass
-        
-    def _cleanup(self):
-        """Clean up resources when video stream ends"""
-        self.is_running = False
-        cv2.destroyAllWindows()
-        logging.info("Destroying all windows.")
-        for i in range(4):
-            cv2.waitKey(1)
-            
-        # Shutdown drone
-        self.drone.streamoff()
-        self.drone.land()
-        self.drone.end()
-        sys.exit()
-        
-    def shutdown(self):
-        """Properly shutdown the controller"""
-        self.stop_video_stream()
-        self.stop_tof_thread()
-        self._cleanup()
 
-    ## END OF NEW VIDEO 
-    
+    # SECTION: TOF and DISTANCE
+
+    def get_distance(self):
+        with self.distance_lock:
+            return self.distance
+            
+    def set_distance(self, distance):
+        with self.distance_lock:
+            self.distance = distance
+
+    def get_tof_distance(self):
+        with self.forward_tof_lock:
+            return self.forward_tof_dist
+
+    def _tof_thread(self, period_s:float = 0.5):
+        """Video streaming thread function"""
+        logging.info("_tof_thread started.")
+        while not self.stop_event.is_set():
+            time.sleep(period_s)
+            try:
+                with self.forward_tof_lock:
+                    self.forward_tof_dist = self.drone.get_ext_tof()
+            except Exception as e:
+                logging.error(f"Error in ToF thread: {e}")
+                time.sleep(0.1)
+        logging.info("_tof_thread exited.")
+        # self._cleanup()
+
+    def start_tof_thread(self):
+        """Start the forward ToF reading in a separate thread"""
+        self.stop_event.clear()
+        self.tof_thread = threading.Thread(target=self._tof_thread)
+        self.tof_thread.daemon = True
+        self.tof_thread.start()
+        
+    def stop_tof_thread(self):
+        """Stop the forward ToF thread"""
+        self.stop_event.set()
+        try:
+            if self.tof_thread and self.tof_thread.is_alive():
+                self.tof_thread.join(timeout=2)
+        except Exception as e:
+            logging.error(f"Error in stopping ToF thread: {e}")
+
+    # SECTION: General Functions
+
+    def shutdown(self):
+        """
+        Properly shuts down the controller, threads and video stream
+        NOTE: DOES NOT LAND THE DRONE
+        """
+        if self.is_running: # ensures shutdown is only run once, no matter the circumstances in which it is called
+            self.is_running = False
+            self.stop_video_stream()
+            self.stop_tof_thread()
+            cv2.destroyAllWindows()
+            logging.info("Shutdown initiated. Destroying all windows.")
+            for i in range(4):
+                cv2.waitKey(1)
+            self.drone.streamoff()
+        else:
+            logging.warning("Trying to shutdown, but already shut down previously.")
+
     def takeoff_simul(self, drones_list:list):
         """
         Waits for a takeoff signal before taking off.
+        Also works for user-triggered simultaneous take-off - use drones_list = [99]
         """
         self.marker_client.send_takeoff_request(drones_list)
         while not self.marker_client.takeoff_signal:
@@ -313,77 +340,37 @@ class DroneController:
             "right": blue_right
         }
 
-    def get_distance(self):
-        with self.distance_lock:
-            return self.distance
-            
-    def set_distance(self, distance):
-        with self.distance_lock:
-            self.distance = distance
+    # def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
+    #     """
+    #     TODO 19 FEB - doesnt work; can also take in an argument to set the actual current pos? inspo PPFLY2
 
-    def get_tof_distance(self):
-        with self.forward_tof_lock:
-            return self.forward_tof_dist
+    #     :args:
+    #     rotation_deg: input given in as GUI json (i.e. +ve ccw) 
 
-    # START OF NEW TOF
-
-    def _tof_thread(self, period_s:float = 0.5):
-        """Video streaming thread function"""
-        while not self.stop_event.is_set():
-            time.sleep(period_s)
-            try:
-                with self.forward_tof_lock:
-                    self.forward_tof_dist = self.drone.get_ext_tof()
-            except Exception as e:
-                logging.error(f"Error in ToF thread: {e}")
-                time.sleep(0.1)
-                
-        self._cleanup()
-
-    def start_tof_thread(self):
-        """Start the forward ToF reading in a separate thread"""
-        self.stop_event.clear()
-        self.tof_thread = threading.Thread(target=self._tof_thread)
-        self.tof_thread.daemon = True
-        self.tof_thread.start()
+    #     (Dead reckoning) Update the drone's position and store it in the waypoints_executed list.
+    #     Also stores the distance travelled / degrees rotated in the previous command.
+    #     Assumes drone rotates and only travels forward in straight lines.
+    #         Drone's rotation is +ve in the clockwise direction (i.e. turning right)
+    #         GUI's rotation (and by extension, waypoints.json) is +ve in the anticlockwise direction (i.e. turning left)
         
-    def stop_tof_thread(self):
-        """Stop the forward ToF thread"""
-        self.stop_event.set()
-        if self.tof_thread and self.tof_thread.is_alive():
-            self.tof_thread.join(timeout=2)
+    #     """
+    #     rad = math.radians(rotation_deg)
+    #     new_x = self.my_current_pos[0] + int(distance_cm * math.sin(rad))
+    #     new_y = self.my_current_pos[1] + int(distance_cm * math.cos(rad))
 
-    def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
-        """
-        TODO 19 FEB - doesnt work; can also take in an argument to set the actual current pos? inspo PPFLY2
+    #     self.my_current_pos = (round(new_x,2), round(new_y,2))
+    #     self.my_current_orientation -= rotation_deg
+    #     self.my_imu_orientation = self.drone.get_yaw()
 
-        :args:
-        rotation_deg: input given in as GUI json (i.e. +ve ccw) 
+    #     if self.my_current_orientation > 180:
+    #         self.my_current_orientation -= 360
+    #     elif self.my_current_orientation < -180:
+    #         self.my_current_orientation += 360
 
-        (Dead reckoning) Update the drone's position and store it in the waypoints_executed list.
-        Also stores the distance travelled / degrees rotated in the previous command.
-        Assumes drone rotates and only travels forward in straight lines.
-            Drone's rotation is +ve in the clockwise direction (i.e. turning right)
-            GUI's rotation (and by extension, waypoints.json) is +ve in the anticlockwise direction (i.e. turning left)
-        
-        """
-        rad = math.radians(rotation_deg)
-        new_x = self.my_current_pos[0] + int(distance_cm * math.sin(rad))
-        new_y = self.my_current_pos[1] + int(distance_cm * math.cos(rad))
-
-        self.my_current_pos = (round(new_x,2), round(new_y,2))
-        self.my_current_orientation -= rotation_deg
-        self.my_imu_orientation = self.drone.get_yaw()
-
-        if self.my_current_orientation > 180:
-            self.my_current_orientation -= 360
-        elif self.my_current_orientation < -180:
-            self.my_current_orientation += 360
-
-        self.waypoints_executed.append({"x_cm": self.my_current_pos[0], "y_cm": self.my_current_pos[1], 
-                                        "orientation_deg": self.my_current_orientation, "imu_orientation_deg": self.my_imu_orientation,
-                                        "distance_cm": distance_cm, "rotation_deg": rotation_deg})
-        logging.info(f"Updated waypoints executed: {self.waypoints_executed}")
+    #     self.waypoints_executed.append({"x_cm": self.my_current_pos[0], "y_cm": self.my_current_pos[1], 
+    #                                     "orientation_deg": self.my_current_orientation, "imu_orientation_deg": self.my_imu_orientation,
+    #                                     "distance_cm": distance_cm, "rotation_deg": rotation_deg})
+    #     logging.info(f"Updated waypoints executed: {self.waypoints_executed}")
 
     def detect_markers(self, frame, display_frame, marker_size=14.0):
         """
@@ -424,7 +411,7 @@ class DroneController:
 
             for i, marker_id in enumerate(detected_ids):
                 rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
-                    corners[i].reshape(1, 4, 2), marker_size, CAMERA_MATRIX, DIST_COEFF
+                    corners[i].reshape(1, 4, 2), marker_size, params.CAMERA_MATRIX, params.DIST_COEFF
                 )
                 x, y, z = tvecs[0][0]
                 euclidean_distance = np.sqrt(x*x + y*y + z*z)
