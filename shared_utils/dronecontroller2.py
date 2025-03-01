@@ -125,11 +125,12 @@ class DroneController:
         NEW, TESTING 1 MAR
         Callback function to handle the land signal. 
         """
-        logging.info(f"Land signal received for Tello {self.drone_id}. Landing...")
-        self.stop_event.set()
-        self.stop_tof_thread()
-        self.stop_video_stream()
-        self.drone.end()
+        logging.info(f"Land signal received for Tello {self.drone_id}. Shutting down...")
+        # self.stop_event.set()
+        # self.stop_tof_thread()
+        # self.stop_video_stream()
+        # self.drone.end()
+        self.shutdown()
         self.marker_client.land_signal = False  # Reset the flag
     
     # SECTION: VIDEO HANDLING
@@ -266,11 +267,11 @@ class DroneController:
         NOTE: DOES NOT LAND THE DRONE
         """
         if self.is_running: # ensures shutdown is only run once, no matter the circumstances in which it is called
+            logging.info("Shutdown initiated. Destroying all windows.")
             self.is_running = False
             self.stop_video_stream()
             self.stop_tof_thread()
             cv2.destroyAllWindows()
-            logging.info("Shutdown initiated. Destroying all windows.")
             for i in range(4):
                 cv2.waitKey(1)
             self.drone.streamoff()
@@ -282,11 +283,10 @@ class DroneController:
         Waits for a takeoff signal before taking off.
         Also works for user-triggered simultaneous take-off - use drones_list = [99]
         """
-        self.marker_client.send_takeoff_request(drones_list)
+        self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")
         while not self.marker_client.takeoff_signal:
             time.sleep(0.1)  # Wait for takeoff command
         logging.info(f"Tello {self.drone_id} is taking off!")
-        self.drone.takeoff()
 
     def generate_color_depth_map(self, frame):
         """Process frame through MiDaS to get depth map. Each frame takes about 0.15-0.30 seconds (Gab tested 1 Mar)"""

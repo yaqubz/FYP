@@ -164,10 +164,13 @@ class MarkerServer:
 
         if "ready" in message:
             self.drone_status[drone_id]["ready"] = message["ready"]
+            self.drone_status[drone_id]["status"] = message.get("status", "WOW") 
+            self.drone_status[drone_id]["status"] = "WOW WHAT1"
             logging.debug(f"{drone_id} ready")
 
         if message["type"] == "takeoff_request":
             logging.debug(f"{drone_id} requesting takeoff. Message: {message}")
+            self.drone_status[drone_id]["status"] = "WOW WHAT2"
             waiting_list = message["waiting_list"]
             self.register_ready_drone(drone_id, waiting_list)
 
@@ -406,7 +409,7 @@ class MarkerClient:
         self.send_update('marker', marker_id=-1)  # Send an initial message to register with the server
         logging.info(f"Marker client {drone_id} broadcasting on {self.broadcast_ip}:{self.server_port}")
 
-    def send_takeoff_request(self, waiting_list:list):
+    def send_takeoff_request(self, waiting_list:list, status_message:str=None):
         """
         Notifies the server that this drone is ready for takeoff and is waiting for the specified drones.
         """
@@ -414,7 +417,8 @@ class MarkerClient:
             "type": "takeoff_request",
             "drone_id": self.drone_id,
             "waiting_list": waiting_list,
-            "ready": True
+            "ready": True,
+            "status": status_message
         }
         message_json = json.dumps(message).encode()
 

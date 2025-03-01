@@ -389,20 +389,18 @@ def main():
     logger.info(f"Starting unknown area main with drone_id: {params.PI_ID}")
     controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY, load_midas=True, imshow=params.IMSHOW)
     try:
-        if not params.NO_FLY:
-            with controller.forward_tof_lock:    
-                controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
-                # controller.drone.takeoff()
-                controller.takeoff_simul([99])
-                logging.info("Taking off for real...")
-                controller.marker_client.send_update('status', status_message=f'Taking off. {controller.drone.get_battery()}%')
-                controller.drone.send_rc_control(0, 0, 0, 0)
-                time.sleep(params.TAKEOFF_HOVER_DELAY)
+        with controller.forward_tof_lock:    
+            controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
+            controller.takeoff_simul([99])  # just holds the drone until released. still needs takeoff() in the next line 
+            controller.drone.takeoff()
+            logging.info("Taking off for real...")
+            controller.marker_client.send_update('status', status_message=f'Taking off. {controller.drone.get_battery()}%')
+            controller.drone.send_rc_control(0, 0, 0, 0)
+            time.sleep(params.TAKEOFF_HOVER_DELAY)
+            if not params.NO_FLY:
                 execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
-        else:
-            controller.takeoff_simul([99])
-            logging.info("Simulating takeoff. Drone will NOT fly.")
-            # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
+
+        # Only start video stream and ToF thread after completing waypoints
         controller.start_video_stream()
         controller.start_tof_thread()
         time.sleep(2)
@@ -420,7 +418,7 @@ def main():
         end_batt = controller.drone.get_battery()
         logging.info(f"Actually landing for real. End Battery Level: {end_batt}%")
         with controller.forward_tof_lock:
-            logging.info("Shutting down controller and ending drone.")
+            logging.info("Finally, shutting down controller and ending drone in main.")
             controller.shutdown()
             controller.drone.end()
         controller.marker_client.send_update('status', status_message=f'Landed. {end_batt}%')
