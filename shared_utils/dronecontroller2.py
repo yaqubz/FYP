@@ -40,9 +40,9 @@ class DroneController:
             self.transform = midas_transforms.small_transform
 
         # Initialize Swarm Client
-        self.marker_client = MarkerClient(drone_id = drone_id)
+        self.marker_client = MarkerClient(drone_id = drone_id, land_callback=self.handle_land_signal)
 
-        ## COMMENT OUT BELOW FOR TESTING
+        ## COMMENT OUT BELOW FOR TESTING ------------------------------------
 
         self.drone.connect()
         self.drone.streamoff()
@@ -68,7 +68,7 @@ class DroneController:
         time.sleep(2)
         self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
             
-        ## COMMENT OUT ABOVE FOR TESTING
+        ## COMMENT OUT ABOVE FOR TESTING ------------------------------------
 
         self.start_tof_thread()
 
@@ -118,6 +118,18 @@ class DroneController:
         self.nearest_danger_data:dict = None  # stores the data of ONE nearest danger marker closest to valid_marker_info
         self.danger_offset:tuple[int] = (0,0,0)
 
+    def handle_land_signal(self):
+        """
+        NEW, TESTING 1 MAR
+        Callback function to handle the land signal. 
+        """
+        logging.info(f"Land signal received for Tello {self.drone_id}. Landing...")
+        self.stop_event.set()
+        self.stop_tof_thread()
+        self.stop_video_stream()
+        self.drone.end()
+        self.marker_client.land_signal = False  # Reset the flag
+    
     # 19 FEB NEW VIDEO HANDLING
 
     def start_video_stream(self, imshow:bool = True):
@@ -153,6 +165,12 @@ class DroneController:
         start_time = 0
         while not self.stop_event.is_set():
             try:
+                # if self.marker_client.land_signal:  # TBC: checks land signal from GUI to Client
+                #     logging.debug("RECEIVED LAND SIGNAL")
+                #     self.shutdown()
+                #     self.drone.end()
+                #     break
+
                 # start_time = log_refresh_rate(start_time, '_stream_video')
 
                 # Capture new frame
@@ -191,6 +209,22 @@ class DroneController:
                 
         self._cleanup()
             
+
+    # def _monitor_land_signal(self):
+    #     """
+    #       NOT USING - trying callback instead
+    #     Monitors the land_signal flag in the MarkerClient and lands the drone if the flag is set.
+    #     """
+    #     while not self.stop_event.is_set():
+    #         if self.marker_client.land_signal:
+    #             logging.info(f"Land signal received for Tello {self.drone_id}. Landing...")
+    #             self.shutdown()
+    #             self.drone.end()
+    #             self.marker_client.land_signal = False
+    #             break
+            
+    #     time.sleep(0.1)  # Check every 100ms
+
     def handle_key_command(self, key):
         """Handle keyboard commands - can be overridden by subclasses"""
         pass

@@ -15,7 +15,8 @@ import logging  # in decreasing log level: debug > info > warning > error > crit
 
 from PPFLY2.main import execute_waypoints
 
-from shared_utils.dronecontroller2 import DroneController
+from shared_utils.dronecontroller2 import DroneController     # WORKS WELL 1 MAR
+# from shared_utils.dronecontroller3 import DroneController     # TESTING 1 MAR (SLOWER???)
 from shared_utils.shared_utils import *
 
 import cv2
@@ -380,13 +381,13 @@ def main():
     # Setup logging
     logger = setup_logging(params, "UnknownArea.main")      # local logger
     logger.info(f"Starting unknown area main with drone_id: {params.PI_ID}")
-    controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY, load_midas=True)
+    controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY, load_midas=True, imshow=params.IMSHOW)
     try:
         if not params.NO_FLY:
             with controller.forward_tof_lock:    
                 controller.marker_client.send_update('status', status_message='Waiting for takeoff')
-                controller.drone.takeoff()
-                # controller.takeoff_simul([11,17])
+                # controller.drone.takeoff()
+                controller.takeoff_simul([11,17])
                 logger.info("Taking off for real...")
                 controller.marker_client.send_update('status', status_message=f'Flying at {controller.drone.get_battery()}%')
                 controller.drone.send_rc_control(0, 0, 0, 0)
@@ -405,14 +406,15 @@ def main():
     finally:
         controller.marker_client.send_update('status', status_message='Landing')
         end_batt = controller.drone.get_battery()
+        controller.is_running = False
         logger.info(f"Actually landing for real. End Battery Level: {end_batt}%")
         with controller.forward_tof_lock:
-            controller.drone.end()
+            controller.shutdown()
         controller.marker_client.send_update('status', status_message=f'Landed. {end_batt}%')
-        controller.is_running = False
-        controller.stop_event.set()
-        cv2.destroyAllWindows()
-        cv2.waitKey(1)
+        # controller.stop_event.set()
+        # controller.shutdown()
+        # cv2.destroyAllWindows()
+        # cv2.waitKey(1)
 
 if __name__ == "__main__":
     main()

@@ -38,7 +38,7 @@ class MarkerServer:
         # Initialize GUI
         self.root = tk.Tk()
         self.root.title("Marker and Drone Status Monitor")
-        self.root.geometry("400x500")  # Increased window size to accommodate both tables
+        self.root.geometry("400x600")  # Increased window size to accommodate both tables
 
         # Create a table to display marker statuses
         self.marker_tree = ttk.Treeview(self.root, columns=("Marker ID", "Detected", "Landed", "Drone ID"), show="headings")
@@ -63,8 +63,40 @@ class MarkerServer:
         # Bind window resize event
         self.root.bind("<Configure>", lambda event: self.adjust_column_widths())
 
+        # Add a button to trigger takeoff
+        self.takeoff_button = tk.Button(self.root, text="Takeoff Ready Drones", command=self.trigger_takeoff)
+        self.takeoff_button.pack(fill=tk.X, pady=10)
+
+        # Add a button to trigger landing
+        self.land_button = tk.Button(self.root, text="Land All Drones", command=self.trigger_land)
+        self.land_button.pack(fill=tk.X, pady=10)
+
         # Start updating the GUI periodically
         self.update_gui()
+
+    def trigger_takeoff(self):
+        """
+        Sends a takeoff signal to all drones that are ready.
+        """
+        ready_drones = [drone_id for drone_id, status in self.drone_status.items() if status.get("ready", False)]
+        if ready_drones:
+            self.send_takeoff_signal(ready_drones)
+        else:
+            logging.warning("No drones are ready for takeoff.")
+
+    def trigger_land(self):
+        """
+        Sends a land signal to all connected drones.
+        """
+        logging.info("Triggering landing...")
+        land_message = json.dumps({"type": "land"}).encode()
+        with self.lock:
+            for client_addr in self.clients:
+                try:
+                    self.broadcast_sock.sendto(land_message, client_addr)
+                except Exception as e:
+                    logging.warning(f"Failed to send land signal to client {client_addr}: {e}")
+        logging.info("Land signal sent to all drones.")
 
     def check_timeouts(self):
         """Check for markers that haven't been updated and clear their detected status"""
@@ -257,7 +289,7 @@ class MarkerServer:
 
     ### SIMUL TAKEOFF FUNCTIONS
 
-    def wait_and_takeoff(self, all_waiting_drones, takeoff_timeout=30, threshold=0.8):
+    def wait_and_takeoff(self, all_waiting_drones, takeoff_timeout=300, threshold=0.8):
         """
         NEW FXN 17 FEB
         Waits for all drones in the waiting list to be ready before sending a takeoff signal.
@@ -355,7 +387,7 @@ class MarkerServer:
         self.root.after(500, self.update_gui)
 
 class MarkerClient:
-    def __init__(self, drone_id=0, server_port=5005, broadcast_ip="255.255.255.255"):
+    def __init__(self, drone_id=0, server_port=5005, broadcast_ip="255.255.255.255", land_callback=None):
         self.drone_id = drone_id
         self.server_port = server_port
         self.broadcast_ip = broadcast_ip
@@ -365,6 +397,8 @@ class MarkerClient:
         self.sock.bind(("0.0.0.0", 0))  # Bind to any available port
         self.ready = False
         self.takeoff_signal = False
+        self.land_signal = False
+        self.land_callback = land_callback
         
         self.marker_status = {}  # Keeps a local copy of marker_status
         threading.Thread(target=self.receive_updates, daemon=True).start()
@@ -434,7 +468,13 @@ class MarkerClient:
 
                 if message.get("type") == "takeoff" and self.drone_id in message.get("takeoff_list"):
                     logging.info(f"Received takeoff signal for Tello {self.drone_id}")
-                    self.takeoff_signal = True  # Set flag for DroneController            
+                    self.takeoff_signal = True  # Set flag for DroneController         
+
+                elif message.get("type") == "land":
+                    logging.info(f"Received land signal for Tello {self.drone_id}")
+                    # self.land_signal = True  # Set flag for DroneController to check  
+                    if self.land_callback:  # Trigger the callback
+                        self.land_callback() 
 
                 else:
                     self.marker_status = message
