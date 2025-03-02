@@ -139,6 +139,13 @@ try:
         time.sleep(1)
         marker_client1.send_update('status', status_message="Moving Forward")
         time.sleep(1)
+        marker_client1.send_update('marker', 2, landed=True)
+        marker_client1.send_update('marker', 3, landed=True)
+        marker_client1.send_update('marker', 4, landed=True)
+        marker_client1.send_update('marker', 5, landed=True)
+        marker_client1.send_update('marker', 6, landed=True)
+        marker_client1.send_update('marker', 7, landed=True)
+        marker_client1.send_update('marker', 8, landed=True)
 
 finally:
         marker_client1.send_update('status', status_message='landing')

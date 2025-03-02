@@ -120,7 +120,7 @@ class MarkerServer:
                                 self.marker_status[marker_id]["detected"] = False
                                 status_changed = True
                     
-                    # Check if all valid markers have landed
+                    # Check if all valid markers have landed (TESTED OK 2 MAR)
                     all_landed = True
                     valid_markers_exist = False
                     
@@ -134,7 +134,7 @@ class MarkerServer:
                     
                     # Reset all landed flags if all valid markers have landed
                     if all_landed and valid_markers_exist:
-                        logging.info("All valid markers have landed. Resetting landed flags.")
+                        logging.info(f"All valid markers {self.valid_ids} have landed. Resetting landed flags.")
                         for marker_id in self.marker_status:
                             if self.marker_status[marker_id].get("landed", False):
                                 self.marker_status[marker_id]["landed"] = False

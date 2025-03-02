@@ -283,9 +283,10 @@ class DroneController:
         Waits for a takeoff signal before taking off.
         Also works for user-triggered simultaneous take-off - use drones_list = [99]
         """
+        self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")
         
         while not self.marker_client.takeoff_signal and self.is_running:
-            self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")
+            # self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")      # probably extra af
             time.sleep(0.5)  # Wait for takeoff command
         logging.info(f"Tello {self.drone_id} is taking off!")
 
