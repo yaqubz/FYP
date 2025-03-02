@@ -136,14 +136,14 @@ class DroneController:
     # SECTION: VIDEO HANDLING
 
     def start_video_stream(self, imshow:bool = True):
-        """Start the video streaming in a separate thread"""
+        """Start the video streaming in a separate thread. External method; Call this in the main code."""
         self.stop_event.clear()
         self.stream_thread = threading.Thread(target=self._stream_video, args={imshow,})
         self.stream_thread.daemon = True
         self.stream_thread.start()
         
     def stop_video_stream(self):
-        """Stop the video streaming thread"""
+        """Stop the video streaming thread. Called in class function shutdown()"""
         self.stop_event.set()
         try:
             if self.stream_thread and self.stream_thread.is_alive():
@@ -152,7 +152,7 @@ class DroneController:
             logging.error(f"Error in stopping video stream: {e}")
 
     def get_current_frame(self):
-        """Thread-safe method to get the latest frame. External method."""
+        """Thread-safe method to get the latest frame. External method; Call this in the main code."""
         with self.frame_lock:
             return self.current_frame.copy() if self.current_frame is not None else None
         
@@ -244,14 +244,14 @@ class DroneController:
         # self._cleanup()
 
     def start_tof_thread(self):
-        """Start the forward ToF reading in a separate thread"""
+        """Start the forward ToF reading in a separate thread. External method; Call this in the main code."""
         self.stop_event.clear()
         self.tof_thread = threading.Thread(target=self._tof_thread)
         self.tof_thread.daemon = True
         self.tof_thread.start()
         
     def stop_tof_thread(self):
-        """Stop the forward ToF thread"""
+        """Stop the forward ToF thread. Internal method."""
         self.stop_event.set()
         try:
             if self.tof_thread and self.tof_thread.is_alive():
@@ -283,9 +283,10 @@ class DroneController:
         Waits for a takeoff signal before taking off.
         Also works for user-triggered simultaneous take-off - use drones_list = [99]
         """
-        self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")
-        while not self.marker_client.takeoff_signal:
-            time.sleep(0.1)  # Wait for takeoff command
+        
+        while not self.marker_client.takeoff_signal and self.is_running:
+            self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")
+            time.sleep(0.5)  # Wait for takeoff command
         logging.info(f"Tello {self.drone_id} is taking off!")
 
     def generate_color_depth_map(self, frame):

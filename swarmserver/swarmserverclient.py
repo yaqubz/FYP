@@ -20,6 +20,7 @@ class MarkerServer:
         self.clients: Set[tuple] = set()
         self.lock = threading.Lock()
         self.last_updates: Dict[str, float] = {}  # Track last update time for each marker
+        self.takeoff_triggered = False
         
         # Create main socket for receiving broadcasts
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -31,6 +32,8 @@ class MarkerServer:
         self.broadcast_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         self.broadcast_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
+        self.valid_ids = set(range(1, 9))   # set because doesn't change
         
         logging.info(f"Swarm server started on {self.host}:{self.port}")
 
@@ -80,7 +83,8 @@ class MarkerServer:
         """
         ready_drones = [drone_id for drone_id, status in self.drone_status.items() if status.get("ready", False)]
         if ready_drones:
-            self.send_takeoff_signal(ready_drones)
+            self.takeoff_triggered = True     # resets countdown in wait_and_takeoff
+            logging.info(f"Takeoff triggered for {ready_drones}.")
         else:
             logging.warning("No drones are ready for takeoff.")
 
@@ -99,19 +103,41 @@ class MarkerServer:
         logging.info("Land signal sent to all drones.")
 
     def check_timeouts(self):
-        """Check for markers that haven't been updated and clear their detected status"""
+        """Check for markers that haven't been updated and clear their detected status.
+        (NEW 2 MAR, TESTING) Also check if all valid markers have landed, and if so, reset all landed flags."""
         while True:
             try:
                 current_time = time.time()
                 status_changed = False
                 
                 with self.lock:
+                    # Check for marker timeouts
                     for marker_id in list(self.marker_status.keys()):
                         last_update = self.last_updates.get(marker_id, 0)
                         if current_time - last_update > self.marker_timeout:
                             if marker_id in self.marker_status and self.marker_status[marker_id].get("detected", False):
                                 logging.info(f"Clearing detected status for marker {marker_id} due to timeout")
                                 self.marker_status[marker_id]["detected"] = False
+                                status_changed = True
+                    
+                    # Check if all valid markers have landed
+                    all_landed = True
+                    valid_markers_exist = False
+                    
+                    for marker_id in self.valid_ids:
+                        str_marker_id = str(marker_id)
+                        if str_marker_id in self.marker_status:
+                            valid_markers_exist = True
+                            if not self.marker_status[str_marker_id].get("landed", False):
+                                all_landed = False
+                                break
+                    
+                    # Reset all landed flags if all valid markers have landed
+                    if all_landed and valid_markers_exist:
+                        logging.info("All valid markers have landed. Resetting landed flags.")
+                        for marker_id in self.marker_status:
+                            if self.marker_status[marker_id].get("landed", False):
+                                self.marker_status[marker_id]["landed"] = False
                                 status_changed = True
                 
                 if status_changed:
@@ -296,7 +322,9 @@ class MarkerServer:
         """
         NEW FXN 17 FEB
         Waits for all drones in the waiting list to be ready before sending a takeoff signal.
+        2 Mar - does not close thread; cannot run twice
         """
+        logging.debug("wait_and_takeoff thread started.")
         start_time = time.time()
         while time.time() - start_time < takeoff_timeout:
             status_copy = self.drone_status.copy()
@@ -305,14 +333,22 @@ class MarkerServer:
                 logging.info(f"All drones {ready_drones} ready for takeoff!")
                 self.send_takeoff_signal(ready_drones)
                 break
+            elif self.takeoff_triggered:
+                logging.info(f"User triggered takeoff. Drones {ready_drones} ready for takeoff!")
+                self.send_takeoff_signal(ready_drones)
+                break
             time.sleep(0.5)
             logging.debug(f"Still waiting... {round((time.time() - start_time),2)}/{takeoff_timeout}s")
 
-        if len(ready_drones) / len(all_waiting_drones) >= threshold:
-            logging.warning(f"{takeoff_timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Exceeded threshold of {threshold*100}%. Sending only these drones: {ready_drones}")
-            self.send_takeoff_signal(ready_drones)
-        else:
-            logging.error(f"{takeoff_timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Takeoff aborted.")
+        if not self.takeoff_triggered:
+            if len(ready_drones) / len(all_waiting_drones) >= threshold:
+                logging.warning(f"{takeoff_timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Exceeded threshold of {threshold*100}%. Sending only these drones: {ready_drones}")
+                self.send_takeoff_signal(ready_drones)
+            else:
+                logging.error(f"{takeoff_timeout}s timeout reached! {len(ready_drones)}/{len(all_waiting_drones)} drones ready. Takeoff aborted.")
+        
+        self.takeoff_triggered = False
+        logging.debug("wait_and_takeoff thread ended.")
 
     def send_takeoff_signal(self, ready_drones:List):
         """

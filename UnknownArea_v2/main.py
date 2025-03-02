@@ -16,7 +16,6 @@ import logging  # in decreasing log level: debug > info > warning > error > crit
 from PPFLY2.main import execute_waypoints
 
 from shared_utils.dronecontroller2 import DroneController     # WORKS WELL 1 MAR
-# from shared_utils.dronecontroller3 import DroneController     # TESTING 1 MAR (SLOWER???)
 from shared_utils.shared_utils import *
 
 import cv2
@@ -215,7 +214,7 @@ def navigation_thread(controller:DroneController):
                 
         try:
             start_time = log_refresh_rate(start_time, 'navigation_thread')
-            
+            logging.debug(f"CHECKPOINT 1: {round((time.time() - start_time), 2)}")
             frame = controller.get_current_frame()
             display_frame = frame.copy()
 
@@ -238,6 +237,7 @@ def navigation_thread(controller:DroneController):
             
             # Check for markers
             marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame, display_frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
+            logging.debug(f"CHECKPOINT 2: {round((time.time() - start_time), 2)}")
             if marker_found:  
                 # Draw marker detection and pose information on the ONE detected valid marker
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
@@ -246,6 +246,8 @@ def navigation_thread(controller:DroneController):
 
                 # PART 1: DETECTION AND LOCK-ON LOGIC
                 goto_approach_sequence:bool = check_marker_server_and_lockon(controller, marker_id, display_frame)
+
+                logging.debug(f"CHECKPOINT 3: {round((time.time() - start_time), 2)}")
                 
                 # PART 2: CENTERING AND APPROACH LOGIC
                 # 26 Feb: Generally works, but reliability can be improved. E.g. Final forward XX may be executed but not acknowledged, causing it to go again.
