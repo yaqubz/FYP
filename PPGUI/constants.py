@@ -2,8 +2,9 @@
 Import Hierarchy: constants -> config -> utils -> main
 EVERYTHING HERE CAN BE ADJUSTED!
 """
-# BGPIC = "resources/field2025_toscale.PNG"
-BGPIC = "resources/blank.jpeg"
+BGPIC = None       # for empty screen!
+BGPIC = "resources/field2025_toscale.PNG"
+# BGPIC = "resources/blank.jpg"
 
 # Scaling Coeffs
 # ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space
@@ -18,7 +19,7 @@ MAP_SIZE_COEFF = ACTUAL_WIDTH / SCREEN_WIDTH  # cm per pixel; ASSUMES 1:1 ratio
 print(f"cm per px = {MAP_SIZE_COEFF}")
 
 WAYPOINTS_JSON_DEFAULT = "waypoint20x20"
-MARKEDPOINTS_JSON_DEFAULT = "UWBViz/uwb_trace"
+MARKEDPOINTS_JSON_DEFAULT = "uwb_trace"
 
 INITIAL_HEADING = 180       # can adjust
 

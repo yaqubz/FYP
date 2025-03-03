@@ -42,6 +42,7 @@ pygame.display.set_caption("Drone Path Planner (Test Area)")
 root = tk.Tk()  # Create a Tkinter root window
 root.withdraw()  # Hide the main Tkinter window
 user_input = ""  # Store the user's input
+marked_points_filename:str = None    # Store marked points filename to display - clear to None if 'cancel' pressed i.e. Esc key
 
 def find_intermediate_waypoints(start, end, interval_cm=50):     # includes both start and end points
     """
@@ -170,20 +171,20 @@ def load_json_waypoints(filename):
         return None
 
 
-def load_marked_positions(filename='UWBViz/uwb_trace'):
+def load_marked_positions(filename='uwb_trace'):
     """
     Load marked positions of obstacles and walls etc. from JSON file and draw them on screen.
     Can load from multiple files
     Press 'Z' to reset - how convenient!
     
     Args:
-        filename (str): Name of the JSON file to load
+        filename (str): Name of the JSON file to load. Excludes UWBViz/
     """
 
     global static_screen_snapshot
     
     try:
-        with open(f"{filename}.json", 'r') as f:
+        with open(f"UWBViz/{filename}.json", 'r') as f:
             marked_positions = json.load(f)["points"] 
             walls = []
             current_wall_start = None
@@ -501,6 +502,122 @@ def waypoints_dialog(path_wp, action_type='save', parent_window=None):
             return None, "load_failed"
     return None, "cancelled"
 
+def marked_points_dialog(parent_window=None):
+    global marked_points_filename
+    # Create a Tkinter window for the dropdown
+    dialog_window = tk.Toplevel(parent_window)
+    dialog_window.title("Marked Points Manager")
+    dialog_width = 400
+    dialog_height = 150  # Reduced height since we have fewer buttons
+    dialog_window.geometry(f"{dialog_width}x{dialog_height}")
+    
+    # Force to be on top and take focus
+    dialog_window.attributes("-topmost", True)
+    
+    # Center dialog on screen
+    dialog_window.update_idletasks()
+    screen_width = dialog_window.winfo_screenwidth()
+    screen_height = dialog_window.winfo_screenheight()
+    x = (screen_width - dialog_window.winfo_width()) // 2
+    y = (screen_height - dialog_window.winfo_height()) // 2
+    dialog_window.geometry(f"+{x}+{y}")
+    
+    # Get list of JSON files in UWBViz/ directory
+    uwbviz_dir = "UWBViz/"
+    json_files = []
+    try:
+        json_files = [f.replace('.json', '') for f in os.listdir(uwbviz_dir) if f.endswith('.json')]
+    except FileNotFoundError:
+        print(f"Warning: Directory {uwbviz_dir} not found")
+    
+    # Ensure default is in the list
+    if MARKEDPOINTS_JSON_DEFAULT not in json_files:
+        json_files.insert(0, MARKEDPOINTS_JSON_DEFAULT)
+    else:
+        # Move default to the first position
+        json_files.remove(MARKEDPOINTS_JSON_DEFAULT)
+        json_files.insert(0, MARKEDPOINTS_JSON_DEFAULT)
+    
+    # Create label
+    tk.Label(dialog_window, text="Select JSON file to load:").pack(pady=10)
+    
+    # Create combobox (dropdown)
+    filename_var = tk.StringVar(value=MARKEDPOINTS_JSON_DEFAULT)
+    filename_combo = ttk.Combobox(dialog_window, textvariable=filename_var, values=json_files, width=30)
+    filename_combo.pack(pady=5)
+    filename_combo.current(0)  # Select default option
+    
+    # Make combobox read-only for load
+    filename_combo.configure(state="readonly")
+    
+    # Variables to store result
+    result = {"filename": None, "action": None}
+    
+    def on_load():
+        result["filename"] = filename_var.get()
+        result["action"] = "load"
+        dialog_window.destroy()
+    
+    def on_cancel():
+        dialog_window.destroy()
+
+    def on_clear():
+        global marked_points_filename
+        """
+        Resets the marked points to None
+        """
+        marked_points_filename = None
+        print(f'Reset marked_points_filename to: {marked_points_filename}')
+        refresh_screen(screen)
+        dialog_window.destroy()
+    
+    # Handle Enter key press to load
+    def on_enter(event):
+        on_load()
+    
+    # Handle Escape key press to cancel
+    def on_escape(event):
+        on_cancel()
+    
+    # Bind Enter and Escape keys to the window
+    dialog_window.bind('<Return>', on_enter)
+    dialog_window.bind('<Escape>', on_escape)
+    
+    # Button frame
+    button_frame = tk.Frame(dialog_window)
+    button_frame.pack(pady=15)
+    
+    # Load and Cancel buttons
+    load_button = tk.Button(button_frame, text="Load", command=on_load)
+    cancel_button = tk.Button(button_frame, text="Cancel", command=on_cancel)
+    clear_button = tk.Button(button_frame, text="Clear", command=on_clear)
+    
+    # Load button has initial focus
+    load_button.config(relief=tk.SUNKEN)
+    
+    # Pack buttons
+    load_button.pack(side=tk.LEFT, padx=10)
+    cancel_button.pack(side=tk.LEFT, padx=10)
+    clear_button.pack(side=tk.LEFT, padx=10)
+    
+    # Ensure the window takes focus
+    dialog_window.after(100, lambda: dialog_window.focus_force())
+    filename_combo.focus_set()
+    
+    # Make window modal (blocks until closed)
+    dialog_window.grab_set()
+    dialog_window.wait_window()
+    
+    # Process result
+    if result["action"] == "load":
+        # Call load_marked_positions function with the selected filename
+        load_marked_positions(result["filename"])
+        print(f"Loaded marked points from {result['filename']}.json")
+        marked_points_filename = result['filename']
+        return True
+    
+    return False
+
 # Main program
 running = True
 processing_input = False
@@ -508,12 +625,33 @@ editing = True
 
 def screen_setup(screen):
     global static_screen_snapshot
-    bground = Background(BGPIC, [0, 0])  # Changed from 'image.png' to 'field.png'
+    bground = Background(BGPIC, [0, 0])
     screen.blit(bground.image, bground.rect)
     draw_grid()
     draw_test_boundaries()
     draw_text_overlay()
+    if marked_points_filename:
+        print(f"Loading marked points from {marked_points_filename}")
+        load_marked_positions(marked_points_filename)
     static_screen_snapshot = screen.copy()
+    print("Screen setup complete.")
+
+def refresh_screen(screen):
+    global path_wp, path_wp_cm, action_index, last_pos
+    path_wp_temp = path_wp
+    if path_wp_temp:  # Check if there are waypoints to undo
+        screen_setup(screen)  # Clear the screen to start fresh
+        path_wp = []
+        path_wp_cm = []
+        action_index = 0
+
+        # Redraw waypoints and lines
+        for i in range(len(path_wp_temp)):
+            process_waypoint_input(path_wp_temp[i])
+            # print(f"i is {i}, pathwp is{path_wp_temp}, currentpos is {path_wp_temp[i]}")
+    else:
+        screen_setup(screen)
+    print("Screen refreshed.")
 
 screen_setup(screen)
 
@@ -589,6 +727,7 @@ while running:
 
             elif event.key == pygame.K_r:   # RESET
                 path_wp = []
+                path_wp_cm = []
                 action_index = 0
                 last_pos = None
                 print("\nScreen reset completed. Waypoints cleared.")
@@ -599,6 +738,7 @@ while running:
                     screen_setup(screen)  # Clear the screen to start fresh
                     path_wp_temp = path_wp[:-1]  # Remove the last waypoint
                     path_wp = []
+                    path_wp_cm = []
                     action_index = 0
                     if path_wp:
                         last_pos = path_wp[-1]  # Set last_pos to the new last waypoint
@@ -634,12 +774,17 @@ while running:
                 
 
             elif event.key == pygame.K_m:  # 'M' key to load markers    # NEEDS WORK 15 FEB
-                user_input = simpledialog.askstring("Load Waypoints", 
-                                                        f"Enter JSON filename to load (without .json extension) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
-                filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}"
-                print(filename)
-                load_marked_positions(filename)
-
+                # user_input = simpledialog.askstring("Load Waypoints", 
+                #                                         f"Enter JSON filename to load \n(without 'UWBViz/' directory prefix + '.json' extension) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
+                # filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}"
+                # print(filename)
+                # load_marked_positions(filename)
+                
+                result = marked_points_dialog()
+                if result:
+                    print("Marked points loaded successfully")
+                else:
+                    print("Marked points not loaded")
         # if event.type == pygame.VIDEORESIZE:  # Handle window resize events
         #     SCREEN_WIDTH = event.w  # Update width and height
         #     SCREEN_HEIGHT = event.h
