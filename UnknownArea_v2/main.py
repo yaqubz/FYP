@@ -393,16 +393,24 @@ def main():
     try:
         with controller.forward_tof_lock:    
             controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
+            init_yaw = controller.drone.get_yaw()
             controller.takeoff_simul([99])  # just holds the drone until released. still needs takeoff() in the next line 
             controller.drone.takeoff()
             logging.info("Taking off for real...")
             controller.marker_client.send_update('status', status_message=f'Taking off. {controller.drone.get_battery()}%')
             controller.drone.send_rc_control(0, 0, 0, 0)
+            time.sleep(1)
+            post_yaw = controller.drone.get_yaw()
+            yaw_back = post_yaw - init_yaw
+            logging.debug(f"Init yaw: {init_yaw}, Post yaw: {post_yaw}, Normalize: {normalize_angle(yaw_back)}")
+            
             time.sleep(params.TAKEOFF_HOVER_DELAY)
             if not params.NO_FLY:
+                logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
                 execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
 
         # Only start video stream and ToF thread after completing waypoints
+        controller.setup_stream()
         controller.start_video_stream()
         controller.start_tof_thread()
         time.sleep(2)

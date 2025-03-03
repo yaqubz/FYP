@@ -40,7 +40,7 @@ From example_copy6.c:
 
 # Define constants
 PERIOD_S = 0.1
-UWB_OFFSET: tuple[float] = (1, 1)       # describes the UWB's offset from actual (0,0) at bottom left
+UWB_OFFSET: tuple[float] = (0, 0)       # describes the UWB's offset from actual (0,0) at bottom left
 
 def parse_data_to_df(data):
     """

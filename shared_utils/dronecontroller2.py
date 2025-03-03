@@ -46,26 +46,20 @@ class DroneController:
 
         self.drone.connect()
         self.drone.streamoff()
-        self.drone.streamon()
         start_batt = self.drone.get_battery()
         self.marker_client.send_update("status", status_message=f'Start Battery: {start_batt}%')
         
-
-        if not laptop_only:
-            # Set video stream properties to reduce latency
-            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
-            self.drone.set_video_fps(self.drone.FPS_15)
-            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
-        
         # 19 FEB NEW Video Stream Properties
-        self.frame_reader = self.drone.get_frame_read()
+        
         self.current_frame = None
         self.display_frame = None
         self.frame_lock = Lock()
         self.stream_thread = None
         self.stop_event = Event()
-        logging.info(f"Start Battery: {start_batt}%. Initializing frame reader... imshow = {imshow}")
+        logging.info(f"Start Battery: {start_batt}%")
         time.sleep(2)
+
+
         
             
         ## COMMENT OUT ABOVE FOR TESTING ------------------------------------
@@ -73,6 +67,9 @@ class DroneController:
         ## Call these two in the main() to avoid unnecessary streaming before takeoff 
         # self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
         # self.start_tof_thread()
+
+        self.laptop_only = laptop_only
+        self.imshow = imshow
 
         # Color depth map
         self.depth_colormap = None
@@ -119,6 +116,26 @@ class DroneController:
         self.nearest_danger_id:int = None
         self.nearest_danger_data:dict = None  # stores the data of ONE nearest danger marker closest to valid_marker_info
         self.danger_offset:tuple[int] = (0,0,0)
+
+
+    def setup_stream(self):
+        """
+        3 Mar Gab - separate function to enable stream to setup anytime in the main code (i.e. after execute_waypoints, to prevent libav264 error from blocking)
+        Takes under 3 seconds to execute
+        """
+        self.drone.streamon()
+        start_time = time.time()
+        logging.info(f"Initializing frame reader... imshow = {self.imshow}")
+        self.frame_reader = self.drone.get_frame_read()
+        
+        if not self.laptop_only:
+            # Set video stream properties to reduce latency
+            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
+            self.drone.set_video_fps(self.drone.FPS_15)
+            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
+
+        time_taken = time.time() - start_time
+        logging.info(f"setup_stream completed in {time_taken:.2f}s")
 
     def handle_land_signal(self):
         """
