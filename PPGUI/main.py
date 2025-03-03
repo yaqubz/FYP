@@ -312,51 +312,41 @@ def label_distance(path_wp, current_pos):
 
     return
 
-def save_json(path_wp, json_name:str):     # Computes and saves final waypoints into .json file
-    """
-    :Args:
-    json_name: Do NOT include .json extension
-
-    Format of json:
-    - distance and angle to NEXT waypoint
-    - current waypoint
-    i.e. by default, last waypoint is not stored (CAN BE TOGGLED BY uncommenting under "else")
-    """
-    if len(path_wp) > 1:      
+def save_json(path_wp, json_name: str):  # Computes and saves final waypoints into .json file
+    if len(path_wp) > 1:
         path_dist_cm = []
         path_dist_px = []
-        path_angle = []       
-        for index in range(len(path_wp)):
-            if index < (len(path_wp) - 1):
-                dist_cm, dist_px = get_dist_btw_pos_px(path_wp[index], path_wp[index+1])
-                path_dist_cm.append(dist_cm)
-                path_dist_px.append(dist_px)
+        path_angle = []
 
-                if index == 0:      ## IMPT: This part assumes the drone starts with initial heading = 180
-                    dummy_point = (path_wp[0][0],path_wp[0][1]-10)  # TODO 6 Jan: Can remove this? MAY NOT WORK PROPERLY YET
-                    angle = get_yaw_angle(dummy_point, path_wp[index+1], path_wp[index]) - INITIAL_HEADING
-                    if angle > 180:
-                        angle -= 360
-                    elif angle < -180:
-                        angle += 360
-                else:
-                    angle = get_yaw_angle(path_wp[index-1], path_wp[index+1], path_wp[index])
-        
-                print(f"{index} yaw angle = {round(angle,0)}")    # TODO 30/10 Check whether can fly with decimal yaw commands
-                path_angle.append(round(angle,0))
+        for index in range(len(path_wp) - 1):  # Iterate until second-last waypoint
+            dist_cm, dist_px = get_dist_btw_pos_px(path_wp[index], path_wp[index+1])
+            path_dist_cm.append(dist_cm)
+            path_dist_px.append(dist_px)
 
-            else: # NEW 7 JAN - final waypoint with remaining distance = 0, angle = 0 (IMPT: ENABLE OR DISABLE THIS AS NEEDED. Alternatively, just delete the last waypoint in the json.)
-                  # TBC 23 Jan : is this really needed for UWB localization?
-                path_dist_cm.append(0)
-                path_dist_px.append(0)
-                path_angle.append(0)
+            if index == 0:  # Initial heading correction
+                dummy_point = (path_wp[0][0], path_wp[0][1] - 10)
+                angle = get_yaw_angle(dummy_point, path_wp[index+1], path_wp[index]) - INITIAL_HEADING
+                if angle > 180:
+                    angle -= 360
+                elif angle < -180:
+                    angle += 360
+            else:
+                angle = get_yaw_angle(path_wp[index-1], path_wp[index+1], path_wp[index])
+
+            print(f"{index} yaw angle = {round(angle, 0)}")
+            path_angle.append(round(angle, 0))
+
+        # Append last waypoint with dist_cm = 0 and angle = 0
+        path_dist_cm.append(0)
+        path_dist_px.append(0)
+        path_angle.append(0)
 
         # Create waypoints data
         waypoints = []
-        for index in range(len(path_dist_cm)):
+        for index in range(len(path_dist_cm)):  # Now includes last waypoint
             position_cm_x = int(path_wp_cm[index][0])
             position_cm_y = int(path_wp_cm[index][1])
-            
+
             waypoints.append({
                 "dist_cm": path_dist_cm[index],
                 "dist_px": path_dist_px[index],
@@ -367,27 +357,28 @@ def save_json(path_wp, json_name:str):     # Computes and saves final waypoints 
                 }
             })
 
-
         now = datetime.datetime.now()
         formatted_datetime = now.strftime("%d %m %H:%M")
 
-        # Save to JSON file
         with open(f'{json_name}.json', 'w+') as f:
             json.dump({
-                "README": "JSON stores current waypoint and distance + angle to NEXT waypoint i.e. final waypoint is when dist_cm = angle_deg = 0!",
+                "README": "JSON stores current waypoint and distance + angle to NEXT waypoint. Final waypoint has dist_cm = angle_deg = 0.",
                 "wp": waypoints,
-                "test_area": {  # EXTRA; not being used caa 7 JAN
+                "test_area": {  
                     "width_cm": ACTUAL_WIDTH,
                     "height_cm": ACTUAL_HEIGHT,
-                    "scale_factor": MAP_SIZE_COEFF},
+                    "scale_factor": MAP_SIZE_COEFF
+                },
                 "competition_notice": "This path was planned in a test area. Scale adjustments needed for 20m x 20m competition field.",
                 "datetime": formatted_datetime
             }, f, indent=4)
+        
         print(f"json saved as {json_name}.json")
-        print("\n------------------\npath_wp:", path_wp, "\npath_wp_cm:",path_wp_cm,"\n------------------") 
+        print("\n------------------\npath_wp:", path_wp, "\npath_wp_cm:", path_wp_cm, "\n------------------")
 
     else:
         print("No waypoints saved.")
+
 
 
 def waypoints_dialog(path_wp, action_type='save', parent_window=None):
