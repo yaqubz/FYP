@@ -117,19 +117,20 @@ marker_client1 = MarkerClient(drone_id=1)
 marker_client2 = MarkerClient(drone_id=2)
 
 marker_client1.send_takeoff_request([1,2])
-time.sleep(2)
+time.sleep(1)
 marker_client2.send_takeoff_request([1,2])
+time.sleep(1)
 
 marker_client1.send_update('status', status_message='takeoff')
 marker_client2.send_update('status', status_message='takeoff')
 marker_client1.send_update('marker', 1, landed=True)
 
 try:
+    alternate =  True
     while True:
         marker_client1.send_update('marker', 1, detected=True)
         time.sleep(1)
         marker_client1.send_update('marker', 1, detected=False)
-        
         time.sleep(1)
         marker_client2.send_update('marker', 2, detected=True)
         time.sleep(1)
@@ -139,13 +140,19 @@ try:
         time.sleep(1)
         marker_client1.send_update('status', status_message="Moving Forward")
         time.sleep(1)
-        # marker_client1.send_update('marker', 2, landed=True)
-        # marker_client1.send_update('marker', 3, landed=True)
-        # marker_client1.send_update('marker', 4, landed=True)
-        # marker_client1.send_update('marker', 5, landed=True)
-        # marker_client1.send_update('marker', 6, landed=True)
-        # marker_client1.send_update('marker', 7, landed=True)
-        # marker_client1.send_update('marker', 8, landed=True)
+        if alternate:
+            marker_client1.send_update('marker', 1, landed=True)
+            marker_client1.send_update('marker', 8, detected=True)
+        marker_client1.send_update('marker', 2, landed=True)
+        marker_client1.send_update('marker', 3, landed=True)
+        marker_client1.send_update('marker', 4, landed=True)
+        time.sleep(1)
+        marker_client2.send_update('marker', 5, landed=True)
+        marker_client2.send_update('marker', 6, landed=True)
+        marker_client2.send_update('marker', 7, landed=True)
+        marker_client2.send_update('marker', 8, landed=True)
+        time.sleep(5)
+        alternate = not alternate
 
 finally:
         marker_client1.send_update('status', status_message='landing')
