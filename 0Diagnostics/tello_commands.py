@@ -11,10 +11,12 @@ print(tello.get_battery())
 # For setting WiFi Configs: (TBC)
 
 tello.send_control_command("wifisetchannel 006")
-# tello.send_command_with_return("set_wifi_band 5")
 
 # tello.send_command_with_return("video?")
-
+# print(tello.get_yaw())
 # tello.takeoff()
-# tello.go_xyz_speed(0,100,0,20)      # x: forward +ve | y: left +ve |
-# tello.end()
+# print(tello.get_yaw())
+# tello.go_xyz_speed(300,0,0,20)      # x: forward +ve | y: left +ve |
+# tello.move_forward(300)      # x: forward +ve | y: left +ve |
+# tello.land()
+# print(tello.get_yaw())

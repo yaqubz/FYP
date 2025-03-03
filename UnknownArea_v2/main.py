@@ -394,7 +394,7 @@ def main():
         with controller.forward_tof_lock:    
             controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
             init_yaw = controller.drone.get_yaw()
-            controller.takeoff_simul([99])  # just holds the drone until released. still needs takeoff() in the next line 
+            controller.takeoff_simul([11,17])  # just holds the drone until released. still needs takeoff() in the next line 
             controller.drone.takeoff()
             logging.info("Taking off for real...")
             controller.marker_client.send_update('status', status_message=f'Taking off. {controller.drone.get_battery()}%')
