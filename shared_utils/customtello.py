@@ -10,6 +10,8 @@ import logging  # in decreasing log level: debug > info > warning > error > crit
 import threading
 import random
 
+from UWB_Wrapper.UWB_SendUDP import UWBPublisher
+
 class CustomTello(Tello):
     
     RESPONSE_TIMEOUT = 7    # Alternative: override globally here (default: 7s)
@@ -181,69 +183,92 @@ class MockFrameReader:
         self.thread.join()
 
 class MockTello:
-    def __init__(self):
+    def __init__(self, uwb_sim=False, uwb_ip='127.0.0.1', uwb_port=5000, tag_id=0):
         self.stream = None  # Video capture object
         self.stream_on = False  # Stream state
         self.yaw = 0  # Initial yaw value
-        self.height = 100
-    
+        self.height = 100  # Initial height in cm
+        self.uwb_sim = uwb_sim  # Whether to simulate UWB data
+        self.uwb_publisher = None  # UWB publisher for simulating position
+
+        if uwb_sim:
+            # Initialize UWB publisher
+            self.uwb_publisher = UWBPublisher(ip=uwb_ip, port=uwb_port, tag_id=tag_id)
+            self.uwb_publisher.start_publishing()  # Start publishing UWB data
+
     def connect(self):
         print("Mock: Drone connected.")
-    
+
     def get_battery(self):
         print("Mock: Battery at 100%")
         return 100
-    
+
     def set_mission_pad_detection_direction(self, direction):
         print(f"Mock: Set mission pad detection direction to {direction}")
-    
+
     def takeoff(self):
         print("Mock: Taking off...")
-    
+        if self.uwb_sim:
+            self.uwb_publisher.update_takeoff(self.height)  # Simulate takeoff
+
     def rotate_clockwise(self, angle):
         self.yaw = (self.yaw + angle) % 360
         if self.yaw > 180:
             self.yaw -= 360  # Ensures yaw stays in the range [-180, 180]
         print(f"Mock: Rotating clockwise by {angle} degrees. New yaw: {self.yaw} degrees.")
-    
+        if self.uwb_sim:
+            self.uwb_publisher.update_rotate(angle)  # Update yaw in UWB publisher
+
     def rotate_counter_clockwise(self, angle):
         self.yaw = (self.yaw - angle) % 360
         if self.yaw > 180:
             self.yaw -= 360  # Ensures yaw stays in the range [-180, 180]
         print(f"Mock: Rotating counter-clockwise by {angle} degrees. New yaw: {self.yaw} degrees.")
-    
+        if self.uwb_sim:
+            self.uwb_publisher.update_rotate(-angle)  # Update yaw in UWB publisher
+
     def move_forward(self, distance):
         print(f"Mock: Moving forward {distance} cm.")
-    
+        if self.uwb_sim:
+            self.uwb_publisher.update_move_forward(distance)  # Simulate forward movement
+
     def get_mission_pad_id(self):
         print("Mock: No mission pad found.")
-        return -1   # Simulates no pad found
-    
+        return -1  # Simulates no pad found
+
     def go_to_height(self, height: int):
         print(f"Mock: Moving up to {height} cm.")
-    
+        self.height = height
+        if self.uwb_sim:
+            self.uwb_publisher.update_takeoff(height)  # Update height in UWB publisher
+
     def go_to_height_PID(self, height: int):
         print(f"Mock: Moving up with PID to {height} cm.")
-    
+        self.height = height
+        if self.uwb_sim:
+            self.uwb_publisher.update_takeoff(height)  # Update height in UWB publisher
+
     def send_rc_control(self, x, y, z, yaw):
         print(f"Mock: Received rc control commands. x: {x}, y: {y}, z: {z}, yaw: {yaw}")
-        self.yaw += yaw/5  # Adjust the yaw based on the rc control command. E.g. rc yaw 35 causes a 7 degrees yaw per command.
+        self.yaw += yaw / 5  # Adjust the yaw based on the rc control command
         self.yaw = (self.yaw + 180) % 360 - 180  # Normalize yaw to [-180, 180]
-    
+        if self.uwb_sim:
+            self.uwb_publisher.update_rc_control(x, y, z, yaw)  # Update velocity and yaw in UWB publisher
+
     def get_yaw(self) -> int:
         print(f"Mock: Current Yaw = {self.yaw}")
         return self.yaw
-    
+
     def get_height(self) -> int:
         print(f"Mock: Current Height = {self.height}")
         return self.height
-    
+
     def get_distance_tof(self) -> int:
         dist = random.randint(50, 100)  # Mock value for distance
         print(f"Mock: Downward ToF = {dist}cm")
         return dist
-    
-    def get_ext_tof(self, simulate_delay:bool = False) -> int:
+
+    def get_ext_tof(self, simulate_delay: bool = False) -> int:
         """
         :args:
         - simulate_delay:bool = Simulates real-life delay of up to 7 seconds
@@ -254,14 +279,14 @@ class MockTello:
         if not simulate_delay:
             delay = 0
 
-        if delay > 5:       # simulate invalid reading
+        if delay > 5:  # Simulate invalid reading
             delay = 7
             ext_dist = 8888
-        
+
         print(f"Mock: Ext ToF = {ext_dist}mm. Simulated response time {delay:.1f}s")
         time.sleep(delay)
         return ext_dist
-    
+
     def streamon(self):
         """Start video stream from laptop webcam."""
         self.stream = cv2.VideoCapture(0)  # Open default camera (0)
@@ -283,20 +308,26 @@ class MockTello:
         """Return a frame reader object that mimics Tello's BackgroundFrameRead."""
         if not self.stream_on or self.stream is None:
             raise Exception("Stream is not started. Call streamon() first.")
-        
+
         self.frame_reader = MockFrameReader(self.stream)  # Start the frame reader
         return self.frame_reader  # Return an object with `.frame`
 
     @property
     def is_flying(self):
         return True
-    
+
     def land(self):
         print("Mock: Landing...")
+        if self.uwb_sim:
+            self.uwb_publisher.update_land()  # Simulate landing
 
     def end(self):
         print("Mock: Landing and Ending...")
+        if self.uwb_sim:
+            self.uwb_publisher.stop_publishing()  # Stop publishing UWB data
 
     def __del__(self):
         """Ensure the webcam is released when the object is deleted."""
         self.streamoff()
+        if self.uwb_sim:
+            self.uwb_publisher.stop_publishing()  # Stop publishing UWB data
