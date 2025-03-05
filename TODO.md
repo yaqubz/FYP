@@ -16,3 +16,8 @@
 
 - USA V2 stream does not close properly after landing
 - USA V2 tends to overshoot victim in forward direction
+
+
+4 Mar
+- UWBViz mark points updates live
+- Combine UWBViz and PPGUI (?)

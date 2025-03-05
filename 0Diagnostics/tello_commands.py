@@ -12,7 +12,6 @@ print(tello.get_battery())
 
 tello.send_control_command("wifisetchannel 006")
 
-# tello.send_command_with_return("video?")
 # print(tello.get_yaw())
 # tello.takeoff()
 # print(tello.get_yaw())

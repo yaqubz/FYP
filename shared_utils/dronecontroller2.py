@@ -26,6 +26,9 @@ class DroneController:
         # Initialize Tello
         logging.debug(f"laptop_only = {laptop_only}")
         self.drone = MockTello() if laptop_only else CustomTello(network_config)
+
+        self.laptop_only = laptop_only
+        self.imshow = imshow
         
         if load_midas:
             # Initialize MiDaS model
@@ -47,7 +50,14 @@ class DroneController:
         self.drone.connect()
         self.drone.streamoff()
         start_batt = self.drone.get_battery()
+        logging.info(f"Start Battery: {start_batt}%")
         self.marker_client.send_update("status", status_message=f'Start Battery: {start_batt}%')
+        if not self.laptop_only:
+            # Set video stream properties to reduce latency
+            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
+            self.drone.set_video_fps(self.drone.FPS_15)
+            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
+
         
         # 19 FEB NEW Video Stream Properties
         
@@ -55,21 +65,13 @@ class DroneController:
         self.display_frame = None
         self.frame_lock = Lock()
         self.stream_thread = None
-        self.stop_event = Event()
-        logging.info(f"Start Battery: {start_batt}%")
-        time.sleep(2)
-
-
-        
+        self.stop_event = Event()      
             
         ## COMMENT OUT ABOVE FOR TESTING ------------------------------------
 
         ## Call these two in the main() to avoid unnecessary streaming before takeoff 
         # self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
         # self.start_tof_thread()
-
-        self.laptop_only = laptop_only
-        self.imshow = imshow
 
         # Color depth map
         self.depth_colormap = None
@@ -118,21 +120,32 @@ class DroneController:
         self.danger_offset:tuple[int] = (0,0,0)
 
 
+    def send_command_with_return_custom(self, command:str, max_retries:int = 3) -> str:
+        """
+        Works 5 Mar - move to CustomTello instead?
+        """
+        success = False
+        for attempt in range(1, max_retries + 1):
+            if not success:
+                response = self.drone.send_command_with_return(command, timeout=3)  # Attempt rotation (OG: 135)
+                if response == "ok":
+                    success = True
+                    logging.info(f"Command successful on attempt {attempt}.")
+                else:
+                    logging.warning(f"Attempt {attempt} failed. Retrying...")
+                time.sleep(1)  # Small delay before retrying
+
     def setup_stream(self):
         """
         3 Mar Gab - separate function to enable stream to setup anytime in the main code (i.e. after execute_waypoints, to prevent libav264 error from blocking)
         Takes under 3 seconds to execute
         """
-        self.drone.streamon()
+        # self.drone.streamon()
+        self.send_command_with_return_custom('streamon', 7)
+
         start_time = time.time()
         logging.info(f"Initializing frame reader... imshow = {self.imshow}")
         self.frame_reader = self.drone.get_frame_read()
-        
-        if not self.laptop_only:
-            # Set video stream properties to reduce latency
-            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
-            self.drone.set_video_fps(self.drone.FPS_15)
-            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
 
         time_taken = time.time() - start_time
         logging.info(f"setup_stream completed in {time_taken:.2f}s")
@@ -304,6 +317,7 @@ class DroneController:
         
         while not self.marker_client.takeoff_signal and self.is_running:
             # self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")      # probably extra af
+            logging.debug(f"Tello {self.drone_id} waiting to take off. takeoff_signal: {self.marker_client.takeoff_signal}, is_running: {self.is_running}")
             time.sleep(0.5)  # Wait for takeoff command
         logging.info(f"Tello {self.drone_id} is taking off!")
 

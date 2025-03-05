@@ -7,9 +7,9 @@ BGPIC = "resources/field2025_toscale.PNG"
 # BGPIC = "resources/blank.jpg"
 
 # Scaling Coeffs
-# ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space
-ACTUAL_HEIGHT, ACTUAL_WIDTH = 1500, 1500  # cm of actual space
-# ACTUAL_HEIGHT, ACTUAL_WIDTH = 600, 600  # cm of actual space
+ACTUAL_HEIGHT, ACTUAL_WIDTH = 2000, 2000  # cm of actual space (competition; nanyang audi)
+# ACTUAL_HEIGHT, ACTUAL_WIDTH = 1500, 1500  # cm of actual space (arc lab)
+# ACTUAL_HEIGHT, ACTUAL_WIDTH = 600, 600  # cm of actual space (uav lab)
 WIDTH_HEIGHT_RATIO = ACTUAL_WIDTH/ACTUAL_HEIGHT
 
 SCREEN_HEIGHT = 700     # pixels on screen

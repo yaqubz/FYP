@@ -69,7 +69,7 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
     if tof_dist == 8888: # ToF error (while loop)
         controller.drone.send_rc_control(0, 0, 0,0)
         cv2.putText(display_frame, "Pausing, ToF error", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-        logging.info("Pausing, ToF error")
+        logging.warning("Pausing, ToF error")
         return display_frame
 
     if controller.depth_map_colors["red"]["center"] > controller.depth_map_colors["blue"]["center"]:
@@ -106,7 +106,8 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
 
                 if not success:
                     logging.warning("Rotation command failed after multiple attempts. Executing recovery maneuver.")
-                    execute_recovery(controller)        # YAQUB NEW 1 MAR 
+                    with controller.forward_tof_lock:
+                        execute_recovery(controller)        # YAQUB NEW 1 MAR 
 
                     # # Secondary attempt to turn using a smaller angle as an alternative
                     # time.sleep(1)
@@ -117,8 +118,9 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
                     #     logging.error("Both rotation attempts failed. Consider manual intervention or emergency stop.")
         
         elif tof_dist <= 500:   # Head-on condition
-            if not params.NO_FLY:
-                controller.drone.rotate_clockwise(180)
+            # if not params.NO_FLY:
+            #     controller.drone.rotate_clockwise(180)
+            controller.drone.rotate_clockwise(180)
             cv2.putText(display_frame, "Avoiding Obstacle", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
             logging.info("Avoiding Obstacle Ahead")
 
@@ -200,21 +202,22 @@ def navigation_thread(controller:DroneController):
     logging.info("Moving to initial altitude...")
     if not params.NO_FLY:
         with controller.forward_tof_lock:
-            controller.drone.go_to_height_PID(params.FLIGHT_HEIGHT) # COMMENTED OUT 27 FEB - waste time?
+            # controller.drone.go_to_height_PID(params.FLIGHT_HEIGHT) # COMMENTED OUT 27 FEB - waste time?
+            controller.drone.go_to_height(params.FLIGHT_HEIGHT) # COMMENTED OUT 27 FEB - waste time?
             # controller.drone.move_up(20)
-        time.sleep(1)
+            time.sleep(2)
+        
     
     # Approach sequence state
     approach_complete = False
     centering_complete = False
-    centering_threshold = 15    # in px
+    centering_threshold = 10    # in px OG: 30 -> 15 
     start_time = 0      # to calculate refresh rate
     
     while controller.is_running:  # Main loop continues until marker found or battery low
                 
         try:
             start_time = log_refresh_rate(start_time, 'navigation_thread')
-            logging.debug(f"CHECKPOINT 1: {round((time.time() - start_time), 2)}")
             frame = controller.get_current_frame()
             display_frame = frame.copy()
 
@@ -231,13 +234,13 @@ def navigation_thread(controller:DroneController):
 
             if controller.empty_frame_received:     # TBC Testing - even with video thread, should probably pause the navigation whenever empty frame is received
                 controller.drone.send_rc_control(0,0,0,0)
-                logging.info("Empty frame received. Pausing navigation_thread with rc(0,0,0,0)")
+                logging.info("Empty frame received. Pausing navigation_thread with rc(0,0,0,0)")    # TBC IF EVER TRIGGERED
                 time.sleep(0.5)
                 continue
             
             # Check for markers
             marker_found, corners, marker_id, rvecs, tvecs = controller.detect_markers(frame, display_frame)   # detects all markers; returns details of ONE valid (and land-able) marker, approved by the server
-            logging.debug(f"CHECKPOINT 2: {round((time.time() - start_time), 2)}")
+            # logging.debug(f"CHECKPOINT 2: {round((time.time() - start_time), 2)}")
             if marker_found:  
                 # Draw marker detection and pose information on the ONE detected valid marker
                 display_frame = draw_pose_axes(display_frame, corners, [marker_id], rvecs, tvecs)
@@ -247,7 +250,7 @@ def navigation_thread(controller:DroneController):
                 # PART 1: DETECTION AND LOCK-ON LOGIC
                 goto_approach_sequence:bool = check_marker_server_and_lockon(controller, marker_id, display_frame)
 
-                logging.debug(f"CHECKPOINT 3: {round((time.time() - start_time), 2)}")
+                # logging.debug(f"CHECKPOINT 3: {round((time.time() - start_time), 2)}")
                 
                 # PART 2: CENTERING AND APPROACH LOGIC
                 # 26 Feb: Generally works, but reliability can be improved. E.g. Final forward XX may be executed but not acknowledged, causing it to go again.
@@ -395,8 +398,11 @@ def main():
             controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
             init_yaw = controller.drone.get_yaw()
             controller.takeoff_simul([11,17])  # just holds the drone until released. still needs takeoff() in the next line 
-            controller.drone.takeoff()
-            logging.info("Taking off for real...")
+            if not params.NO_FLY:
+                controller.drone.takeoff()
+                logging.info("Taking off for real...")
+            else:
+                logging.info("Simulating taking off for real...")
             controller.marker_client.send_update('status', status_message=f'Taking off. {controller.drone.get_battery()}%')
             controller.drone.send_rc_control(0, 0, 0, 0)
             time.sleep(1)
@@ -407,8 +413,10 @@ def main():
             time.sleep(params.TAKEOFF_HOVER_DELAY)
             if not params.NO_FLY:
                 logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
-                execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
-
+                # execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+            else:
+                logging.info(f"Simulating executing waypoints {params.WAYPOINTS_JSON}")
+                
         # Only start video stream and ToF thread after completing waypoints
         controller.setup_stream()
         controller.start_video_stream()
