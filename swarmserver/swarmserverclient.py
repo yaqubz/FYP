@@ -128,7 +128,7 @@ class MarkerServer:
                         str_marker_id = str(marker_id)
                         if str_marker_id in self.marker_status:
                             valid_markers_exist = True
-                            logging.debug(f"DEBUGGING NOW: {str_marker_id}: {self.marker_status[str_marker_id].get("landed", False)}")
+                            # logging.debug(f"DEBUGGING NOW: {str_marker_id}: {self.marker_status[str_marker_id].get("landed", False)}")
                             if not self.marker_status[str_marker_id].get("landed", False):
                                 all_landed = False
                                 break
@@ -448,6 +448,19 @@ class MarkerClient:
 
         self.send_update('marker', marker_id=-1)  # Send an initial message to register with the server
         logging.info(f"Marker client {drone_id} broadcasting on {self.broadcast_ip}:{self.server_port}")
+
+    def client_takeoff_simul(self, drones_list:list, status_message:str = None):
+        """
+        5 MAR NEW - remove from DroneController, put here instead!
+        For manual clicking, use drones_list = [99]
+        """
+        self.send_takeoff_request(drones_list, status_message=status_message)
+        
+        while not self.takeoff_signal:      # This is a holding pattern, which releases upon takeoff_signal being set by the server.
+            logging.debug(f"Tello {self.drone_id} waiting to take off. takeoff_signal: {self.takeoff_signal}")
+            time.sleep(0.5)  # Wait for takeoff command
+
+        logging.info(f"Tello {self.drone_id} is taking off!")
 
     def send_takeoff_request(self, waiting_list:list, status_message:str=None):
         """

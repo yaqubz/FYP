@@ -7,11 +7,11 @@ LAPTOP_ONLY:bool = False   # indicate LAPTOP_ONLY = True to use MockTello() and 
 NO_FLY:bool = False        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
-PI_ID:int = 0   # 0 for LAPTOP_ONLY
+PI_ID:int = 11   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 11
 
-WAYPOINTS_JSON = "waypoint_USA5_2.json"         # For testing pillars area (Gab's startpoint -> Yaqub's entrance)
-# WAYPOINTS_JSON = "waypoint_USA5_1.json"       # FOR ARCHIT DEMO (5 MAR)
+# WAYPOINTS_JSON = "waypoint_USA5_2.json"         # For testing pillars area (Gab's startpoint -> Yaqub's entrance)
+WAYPOINTS_JSON = "waypoint_USA5_1.json"       # FOR ARCHIT DEMO (5 MAR)
 
 
 FLIGHT_HEIGHT:int = 110

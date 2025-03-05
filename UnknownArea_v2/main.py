@@ -352,7 +352,8 @@ def navigation_thread(controller:DroneController):
                         controller.drone.rotate_clockwise(90)
 
                 elif not params.NO_FLY:
-                    logging.info(f"Exit more than 3m away, no action taken.")
+                    logging.info(f"Exit more than 3m away, no action taken. Executing nav_with_depthmap_tof.") 
+                    display_frame = nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
 
             else: # Navigation logic using depth map if neither victim nor exit detected. Simulates well without drone
                 # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)
@@ -397,7 +398,8 @@ def main():
         with controller.forward_tof_lock:    
             controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
             init_yaw = controller.drone.get_yaw()
-            controller.takeoff_simul([11,17])  # just holds the drone until released. still needs takeoff() in the next line 
+            # controller.takeoff_simul([11,17])  # just holds the drone until released. still needs takeoff() in the next line 
+            controller.marker_client.client_takeoff_simul([99])     # change to marker client
             if not params.NO_FLY:
                 controller.drone.takeoff()
                 logging.info("Taking off for real...")
@@ -413,7 +415,7 @@ def main():
             time.sleep(params.TAKEOFF_HOVER_DELAY)
             if not params.NO_FLY:
                 logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
-                # execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+                execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
             else:
                 logging.info(f"Simulating executing waypoints {params.WAYPOINTS_JSON}")
                 

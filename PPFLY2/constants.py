@@ -1,6 +1,6 @@
 # Adjust Params Here
 START_HEADING = 0
-INCREMENT_CM = 300      # IMPT: maximum go_xyz distance is 500cm; should be set to a value no more than 500
+INCREMENT_CM = 450      # IMPT: maximum go_xyz distance is 500cm; should be set to a value no more than 500
 
 # Do not touch Params
 waypoints = []      # to store executed waypoints and drone's current position

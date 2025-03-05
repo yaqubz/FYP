@@ -140,8 +140,12 @@ class DroneController:
         3 Mar Gab - separate function to enable stream to setup anytime in the main code (i.e. after execute_waypoints, to prevent libav264 error from blocking)
         Takes under 3 seconds to execute
         """
-        # self.drone.streamon()
-        self.send_command_with_return_custom('streamon', 7)
+
+        if self.laptop_only:
+            self.drone.streamon()
+
+        else:
+            self.send_command_with_return_custom('streamon', 7)     # DOES NOT WORK FOR LAPTOP_ONLY - use top instead
 
         start_time = time.time()
         logging.info(f"Initializing frame reader... imshow = {self.imshow}")

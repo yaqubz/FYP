@@ -15,6 +15,7 @@ from UWB_Wrapper.UWB_SendUDP import UWBPublisher
 class CustomTello(Tello):
     
     RESPONSE_TIMEOUT = 7    # Alternative: override globally here (default: 7s)
+    TAKEOFF_TIMEOUT = 10    # (default: 20s)
     
     def __init__(self, network_config):
         # Store custom configuration
