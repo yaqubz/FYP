@@ -11,7 +11,7 @@ from .utils import *
 import pandas as pd
 
 import tkinter as tk
-from tkinter import simpledialog
+from tkinter import simpledialog, ttk
 
 """
     python -m UWBViz.main
@@ -47,6 +47,7 @@ class UWBVisualization:
         self.last_mouse_pos = None
         self.waypoints = []
         self.loaded_marked_pos = None
+        self.loaded_marked_pos_filename:str = None  
 
         self.last_cmdline:str = None        # Disabled 15 Feb - too complex to implement printing cmdline on pygame
         
@@ -67,22 +68,141 @@ class UWBVisualization:
         self.data_thread = threading.Thread(target=self.collect_data, daemon=True)
         self.data_thread.start()
 
-    def load_marked_positions(self):
-        """Load marked positions from JSON file"""
+    def load_marked_positions(self, filename=None):
+        """Load marked positions from JSON file. Do not include .json extension and UWBViz/ directory"""
 
-        user_input = simpledialog.askstring("Load Marked Positions", 
-                                        f"Enter JSON filename to load (without .json extension) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
-        
-        filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
+        # if not filename:
+        #     user_input = simpledialog.askstring("Load Marked Positions", 
+        #                                     f"Enter JSON filename to load (without .json extension) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
+            
+        #     filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
+
+        full_filename = f"UWBViz/{filename}.json"
+        print(f"Full filename: {full_filename}")
 
         try:
-            with open(filename, 'r') as f:
+            with open(full_filename, 'r') as f:
                 self.loaded_marked_pos = json.load(f)["points"]
+                self.loaded_marked_pos_filename = filename
             print("[INFO] Marked positions loaded successfully.")
         except FileNotFoundError:
             print("[INFO] No saved marked positions found.")
         except Exception as e:
             print(f"[ERROR] Could not load marked positions: {e}")
+
+    def marked_points_dialog(self, parent_window=None):
+
+        # Create a Tkinter window for the dropdown
+        dialog_window = tk.Toplevel(parent_window)
+        dialog_window.title("Marked Points Manager")
+        dialog_width = 400
+        dialog_height = 150  # Reduced height since we have fewer buttons
+        dialog_window.geometry(f"{dialog_width}x{dialog_height}")
+        
+        # Force to be on top and take focus
+        dialog_window.attributes("-topmost", True)
+        
+        # Center dialog on screen
+        dialog_window.update_idletasks()
+        screen_width = dialog_window.winfo_screenwidth()
+        screen_height = dialog_window.winfo_screenheight()
+        x = (screen_width - dialog_window.winfo_width()) // 2
+        y = (screen_height - dialog_window.winfo_height()) // 2
+        dialog_window.geometry(f"+{x}+{y}")
+        
+        # Get list of JSON files in UWBViz/ directory
+        uwbviz_dir = "UWBViz/"
+        json_files = []
+        try:
+            json_files = [f.replace('.json', '') for f in os.listdir(uwbviz_dir) if f.endswith('.json')]
+        except FileNotFoundError:
+            print(f"Warning: Directory {uwbviz_dir} not found")
+        
+        # Ensure default is in the list
+        if MARKEDPOINTS_JSON_DEFAULT not in json_files:
+            json_files.insert(0, MARKEDPOINTS_JSON_DEFAULT)
+        else:
+            # Move default to the first position
+            json_files.remove(MARKEDPOINTS_JSON_DEFAULT)
+            json_files.insert(0, MARKEDPOINTS_JSON_DEFAULT)
+        
+        # Create label
+        tk.Label(dialog_window, text=f"Select JSON file to load:\nCurrently loaded: {self.loaded_marked_pos_filename}").pack(pady=10)
+        
+        # Create combobox (dropdown)
+        filename_var = tk.StringVar(value=MARKEDPOINTS_JSON_DEFAULT)
+        filename_combo = ttk.Combobox(dialog_window, textvariable=filename_var, values=json_files, width=30)
+        filename_combo.pack(pady=5)
+        filename_combo.current(0)  # Select default option
+        
+        # Make combobox read-only for load
+        filename_combo.configure(state="readonly")
+        
+        # Variables to store result
+        result = {"filename": None, "action": None}
+        
+        def on_load():
+            result["filename"] = filename_var.get()
+            result["action"] = "load"
+            dialog_window.destroy()
+        
+        def on_cancel():
+            dialog_window.destroy()
+
+        def on_clear():
+            """
+            Resets the marked points to None
+            """
+            self.loaded_marked_pos = None
+            self.recording_manager.recorded_points = []
+            self.recording_manager.current_wall_id = 0
+            dialog_window.destroy()
+        
+        # Handle Enter key press to load
+        def on_enter(event):
+            on_load()
+        
+        # Handle Escape key press to cancel
+        def on_escape(event):
+            on_cancel()
+        
+        # Bind Enter and Escape keys to the window
+        dialog_window.bind('<Return>', on_enter)
+        dialog_window.bind('<Escape>', on_escape)
+        
+        # Button frame
+        button_frame = tk.Frame(dialog_window)
+        button_frame.pack(pady=15)
+        
+        # Load and Cancel buttons
+        load_button = tk.Button(button_frame, text="Load", command=on_load)
+        cancel_button = tk.Button(button_frame, text="Cancel", command=on_cancel)
+        clear_button = tk.Button(button_frame, text="Clear", command=on_clear)
+        
+        # Load button has initial focus
+        load_button.config(relief=tk.SUNKEN)
+        
+        # Pack buttons
+        load_button.pack(side=tk.LEFT, padx=10)
+        cancel_button.pack(side=tk.LEFT, padx=10)
+        clear_button.pack(side=tk.LEFT, padx=10)
+        
+        # Ensure the window takes focus
+        dialog_window.after(100, lambda: dialog_window.focus_force())
+        filename_combo.focus_set()
+        
+        # Make window modal (blocks until closed)
+        dialog_window.grab_set()
+        dialog_window.wait_window()
+        
+        # Process result
+        if result["action"] == "load":
+            # Call load_marked_positions function with the selected filename
+            self.load_marked_positions(result["filename"])
+            print(f"Loaded marked points from {result['filename']}.json")
+            return True
+        
+        return False
 
     def collect_data(self):
         while True:
@@ -129,7 +249,8 @@ class UWBVisualization:
             ):
                 
                 if self.recording_manager.recording:
-                    self.recording_manager.stop_recording()
+                    filename = self.recording_manager.stop_recording(self.loaded_marked_pos)
+                    self.load_marked_positions(filename)
                 return False
                 
             elif event.type == pygame.VIDEORESIZE:
@@ -208,7 +329,8 @@ class UWBVisualization:
             if not self.recording_manager.recording:
                 self.recording_manager.start_recording()
             else:
-                self.recording_manager.stop_recording()
+                filename = self.recording_manager.stop_recording(self.loaded_marked_pos)
+                self.load_marked_positions(filename)
                 
         elif key == pygame.K_w and current_pos:  # Toggle wall recording
             self.recording_manager.toggle_wall(
@@ -223,8 +345,17 @@ class UWBVisualization:
             self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'victim')
         elif key == pygame.K_d:
             self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'danger')
+
+        elif key == pygame.K_z:
+            self.recording_manager.remove_last_obj()
+
         elif key == pygame.K_m:
-            self.load_marked_positions()
+            # self.load_marked_positions()
+            result = self.marked_points_dialog()
+            if result:
+                print("Marked points loaded successfully")
+            else:
+                print("Marked points not loaded")
 
 
     def pause_data_thread(self):
@@ -264,8 +395,13 @@ class UWBVisualization:
         self.visualization.draw_rectangle()
         self.visualization.draw_waypoints(self.waypoints)
         self.visualization.draw_positions()
-        if self.loaded_marked_pos:
+        if self.loaded_marked_pos:      # Draws pre-loaded positions
             self.visualization.draw_marked_positions(self.loaded_marked_pos)
+
+        if self.recording_manager.recorded_points:
+            self.visualization.draw_marked_positions(self.recording_manager.recorded_points)
+
+        
         
         if self.recording_manager.recording:
             font = pygame.font.Font(None, 36)

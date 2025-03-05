@@ -4,7 +4,7 @@ import time
 from .constants import *
 from typing import List, Dict, Any
 import tkinter as tk
-from tkinter import simpledialog
+from tkinter import simpledialog, messagebox
 
 class Background:
     def __init__(self, image_path):
@@ -203,25 +203,33 @@ class RecordingManager:
     def start_recording(self):
         """Start a new recording session"""
         self.recording:bool = True
-        self.recorded_points = []
+        # self.recorded_points = []
         print("[INFO] Ready to record. Hotkeys: W-Walls (toggle on/off) | P-Pillars | V-Victims")
         
-    def stop_recording(self):
+    def stop_recording(self, prev_loaded_points=None):
         """
-        Stop recording and save data. Data must be recorded and saved in one setting! Cannot load json and add more data.
-        Can manually combine json for separate recordings.
+        Stop recording and save data. Can load existing marked points file, merge with new recorded points, then save separately or overwrite.
         
         """
         self.recording = False
         self.recording_wall = False
+
+        if prev_loaded_points:
+            result = self.prompt_merge()
+            if result:
+                print(f"Currently recorded points: {self.recorded_points}")
+                print(f"Prev loaded points: {prev_loaded_points}")
+                self.recorded_points.extend(prev_loaded_points)
         
         if self.recorded_points:
             user_input = simpledialog.askstring("Save Marked Positions", 
-                                        f"Enter JSON filename to save (without .json extension) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
-        
-            filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
+                                        f"Enter JSON filename to save (without .json extension and UWBViz/ directory) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
             
-    # Count pillars, victims, and danger points *before* creating the JSON
+            filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else filename
+        
+            full_filename = f"UWBViz/{filename}.json"
+            
+        # Count pillars, victims, and danger points *before* creating the JSON
             total_pillars = 0
             total_victims = 0
             total_danger = 0
@@ -235,7 +243,7 @@ class RecordingManager:
                 elif point_type == "danger":
                     total_danger += 1
 
-            with open(filename, 'w') as f:
+            with open(full_filename, 'w') as f:
                 json.dump({
                     'points': self.recorded_points,
                     'metadata': {   # for user reference only! not used elsewhere
@@ -246,10 +254,22 @@ class RecordingManager:
                         'total_danger': total_danger
                     }
                 }, f, indent=4)
-            print(f"[INFO] Recording saved to {filename}")
+            print(f"[INFO] Recording saved to {full_filename}")
+
+        return filename
             
         # self.recorded_points = []
         
+    def prompt_merge(self) -> bool:
+        """Prompts the user with a yes/no dialog for merging positions."""
+        root = tk.Tk()
+        root.withdraw()  # Hide the main window
+
+        response = messagebox.askyesno("Merge", "Merge loaded positions with new ones?")
+        root.destroy() # Clean up the root window
+        return response
+
+    
     def toggle_wall(self, x, y, z):
         """Toggle wall recording state and mark start/end points"""
         if self.recording:
@@ -285,7 +305,21 @@ class RecordingManager:
         else:
             print("[WARNING] Recording not enabled. Press R to enable.")
             
-        
+    def remove_last_obj(self):
+        if self.recording and not self.recording_wall and self.recorded_points:
+            if self.recorded_points[-1].get("type", None) == "wall_end":
+                print(f"Removing walls. {self.recorded_points[-2:]}")
+                self.recorded_points = self.recorded_points[0:-2]
+                
+            else:
+                print(f"Removing point. {self.recorded_points[-1]}")
+                self.recorded_points = self.recorded_points[0:-1]
+        elif not self.recording:
+            print("Unable to undo last object. Ensure recording on!")
+        elif self.recording_wall:
+            print("Unable to undo last object. Ensure finished recording wall!")
+        else:
+            print("Unable to undo last object. No points recorded.")
 
 def distance(point1, point2):
     """Calculate Euclidean distance between two points"""
