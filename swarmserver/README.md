@@ -6,7 +6,9 @@
 - A single `MarkerServer` must be running per network.  
 - The server **must be started before** drone initialization to handle takeoff requests.  
 
-🔹 **See `example.py` for an example implementation.**
+🔹 **See `example.py` for a simple implementation using a real drone.**
+🔹 **See `example_nodrone.py` for a more thorough implementation without a drone.**
+🔹 **Ensure `swarmserverclient.py` is running before starting both scripts!**
 
 ## Installation & Usage
 
