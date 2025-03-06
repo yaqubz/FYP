@@ -343,81 +343,39 @@ class DroneController:
         
     def process_depth_color_map(self, depth_colormap):
         """
-        :param depth_colormap: the actual frame of the depth color map
+        :param: depth_colormap: the actual frame of the depth color map
         :return: None
-        Splits the depth map into a 3x3 grid and performs two levels of analysis:
-        - Overall middle row analysis (middle_left, middle_center, middle_right).
-        - Further subdivision of the middle_center region into three columns.
-        Updates class attributes.
+        Split depth map into regions for navigation. Updates class attributes.
         """
         h, w = depth_colormap.shape[:2]
-
-        # Define the 3x3 grid regions
-        top_left     = depth_colormap[:h//3, :w//3]
-        top_center   = depth_colormap[:h//3, w//3:2*w//3]
-        top_right    = depth_colormap[:h//3, 2*w//3:]
+        left_region = depth_colormap[:, :w//3]
+        center_region = depth_colormap[:, w//3:2*w//3]
+        right_region = depth_colormap[:, 2*w//3:]
         
-        middle_left  = depth_colormap[h//3:2*h//3, :w//3]
-        middle_center= depth_colormap[h//3:2*h//3, w//3:2*w//3]
-        middle_right = depth_colormap[h//3:2*h//3, 2*w//3:]
-        
-        bottom_left  = depth_colormap[2*h//3:, :w//3]
-        bottom_center= depth_colormap[2*h//3:, w//3:2*w//3]
-        bottom_right = depth_colormap[2*h//3:, 2*w//3:]
-        
-        # Draw the outer grid lines (green)
+        # Draw region divisions on depth map
         cv2.line(depth_colormap, (w//3, 0), (w//3, h), (0, 255, 0), 2)
         cv2.line(depth_colormap, (2*w//3, 0), (2*w//3, h), (0, 255, 0), 2)
-        cv2.line(depth_colormap, (0, h//3), (w, h//3), (0, 255, 0), 2)
-        cv2.line(depth_colormap, (0, 2*h//3), (w, 2*h//3), (0, 255, 0), 2)
         
-        # Analyze colors in the middle row regions
-        red_middle_left = np.sum((middle_left[:, :, 2] > 150) & (middle_left[:, :, 0] < 50))
-        blue_middle_left = np.sum((middle_left[:, :, 0] > 150) & (middle_left[:, :, 2] < 50))
+        # Analyze colors in regions
+        red_left = np.sum((left_region[:, :, 2] > 150) & (left_region[:, :, 0] < 50))
+        red_center = np.sum((center_region[:, :, 2] > 150) & (center_region[:, :, 0] < 50))
+        red_right = np.sum((right_region[:, :, 2] > 150) & (right_region[:, :, 0] < 50))
         
-        red_middle_center = np.sum((middle_center[:, :, 2] > 150) & (middle_center[:, :, 0] < 50))
-        blue_middle_center = np.sum((middle_center[:, :, 0] > 150) & (middle_center[:, :, 2] < 50))
-        
-        red_middle_right = np.sum((middle_right[:, :, 2] > 150) & (middle_right[:, :, 0] < 50))
-        blue_middle_right = np.sum((middle_right[:, :, 0] > 150) & (middle_right[:, :, 2] < 50))
-        
-        # Further split the middle_center region into 3 columns for detailed analysis
-        mc_row_start = h//3
-        mc_row_end = 2*h//3
-        mc_col_start = w//3
-        mc_col_end = 2*w//3
-        mc_width = mc_col_end - mc_col_start  # roughly w//3
-        sub_width = mc_width // 3             # width of each subdivided region
-        
-        middle_center_left = depth_colormap[mc_row_start:mc_row_end, mc_col_start: mc_col_start + sub_width]
-        middle_center_center = depth_colormap[mc_row_start:mc_row_end, mc_col_start + sub_width: mc_col_start + 2*sub_width]
-        middle_center_right = depth_colormap[mc_row_start:mc_row_end, mc_col_start + 2*sub_width: mc_col_end]
-        
-        # Draw extra vertical lines (blue) within the middle_center region to delineate subdivisions
-        cv2.line(depth_colormap, (mc_col_start + sub_width, mc_row_start), (mc_col_start + sub_width, mc_row_end), (255, 0, 0), 2)
-        cv2.line(depth_colormap, (mc_col_start + 2*sub_width, mc_row_start), (mc_col_start + 2*sub_width, mc_row_end), (255, 0, 0), 2)
-        
-        # Analyze colors in the subdivided middle_center subregions
-        red_mc_left = np.sum((middle_center_left[:, :, 2] > 150) & (middle_center_left[:, :, 0] < 50))
-        blue_mc_left = np.sum((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50))
-        
-        red_mc_center = np.sum((middle_center_center[:, :, 2] > 150) & (middle_center_center[:, :, 0] < 50))
-        blue_mc_center = np.sum((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50))
-        
-        red_mc_right = np.sum((middle_center_right[:, :, 2] > 150) & (middle_center_right[:, :, 0] < 50))
-        blue_mc_right = np.sum((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50))
-        
-        # Update class attributes with both levels of analysis
-        self.depth_map_colors["middle_row"] = {
-            "middle_left": {"red": red_middle_left, "blue": blue_middle_left},
-            "middle_center": {"red": red_middle_center, "blue": blue_middle_center},
-            "middle_right": {"red": red_middle_right, "blue": blue_middle_right}
+        blue_left = np.sum((left_region[:, :, 0] > 150) & (left_region[:, :, 2] < 50))
+        blue_center = np.sum((center_region[:, :, 0] > 150) & (center_region[:, :, 2] < 50))
+        blue_right = np.sum((right_region[:, :, 0] > 150) & (right_region[:, :, 2] < 50))
+
+        # Update class attribute
+        self.depth_map_colors["red"] = {
+            "left": red_left,
+            "center": red_center,
+            "right": red_right
         }
-        
-        self.depth_map_colors["middle_center_split"] = {
-            "left": {"red": red_mc_left, "blue": blue_mc_left},
-            "center": {"red": red_mc_center, "blue": blue_mc_center},
-            "right": {"red": red_mc_right, "blue": blue_mc_right}
+
+        self.depth_map_colors["blue"] = {
+            "left": blue_left,
+            "center": blue_center,
+            "right": blue_right
         }
 
     # def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
@@ -561,8 +519,7 @@ class DroneController:
             # END OF 5 MAR TESTING
 
             # Compute distance of all detected danger markers to the single valid marker, then finds and save the ID and data of the nearest
-            # if self.valid_marker_info and not self.nearest_danger_id:
-            if self.valid_marker_info:       
+            if self.valid_marker_info and not self.nearest_danger_id:       
                 for danger_id, danger_data in danger_marker_info.items():
                     dx = self.valid_marker_info["position"][0] - danger_data["position"][0]
                     dy = self.valid_marker_info["position"][1] - danger_data["position"][1]
