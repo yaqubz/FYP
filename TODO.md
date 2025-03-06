@@ -19,5 +19,9 @@
 
 
 4 Mar
-- UWBViz mark points updates live
-- Combine UWBViz and PPGUI (?)
+- (DONE) UWBViz mark points updates live
+- Combine UWBViz and PPGUI (TBC necessary?)
+
+6 Mar
+- send status update (batt %) together with "ready"
+- takeoff timeout 20s -> 10s

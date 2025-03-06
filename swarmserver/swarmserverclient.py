@@ -192,17 +192,19 @@ class MarkerServer:
         if drone_id not in self.drone_status:
             self.drone_status[drone_id] = {"ready": False}
 
-        if "ready" in message:
-            self.drone_status[drone_id]["ready"] = message["ready"]
-            self.drone_status[drone_id]["status"] = message.get("status", "WOW") 
-            self.drone_status[drone_id]["status"] = "WOW WHAT1"
-            logging.debug(f"{drone_id} ready")
+        # if "ready" in message:
+        #     # self.drone_status[drone_id]["ready"] = message["ready"]
+        #     # self.drone_status[drone_id]["status"] = message.get("status", "WOW") 
+        #     self.drone_status[drone_id]["status"] = message['status'] 
+        #     # self.drone_status[drone_id]["status"] = "WOW WHAT1"
+        #     logging.debug(f"{drone_id} ready")
 
         if message["type"] == "takeoff_request":
             logging.debug(f"{drone_id} requesting takeoff. Message: {message}")
             self.drone_status[drone_id]["status"] = "WOW WHAT2"
             waiting_list = message["waiting_list"]
-            self.register_ready_drone(drone_id, waiting_list)
+            status = message.get("status", None)
+            self.register_ready_drone(drone_id, waiting_list, status)
 
         elif message["type"] == "status":
             logging.debug(f"{drone_id} status update. Message: {message}")
@@ -210,14 +212,15 @@ class MarkerServer:
 
         logging.info(f"Drone Statuses: {self.drone_status}")
 
-    def register_ready_drone(self, drone_id, waiting_list:List):
+    def register_ready_drone(self, drone_id, waiting_list:List, status_str:str = None):
         """
         Registers a drone as ready and checks if all required drones are also ready.
         """
         with self.lock:
             self.drone_status[drone_id] = {
                 "ready": True,
-                "waiting_list": waiting_list
+                "waiting_list": waiting_list,
+                "status": status_str
             }
             all_waiting_drones = set(waiting_list) | {drone_id}
 
