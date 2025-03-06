@@ -4,7 +4,7 @@
 
 ## Overview
 
-This package, along with `swarmserver`, allows multiple drones to autonomously search an unknown area and land on specific ArUco markers, while ensuring that no two drones target the same marker,
+This package runs a drone to perform a set of known waypoints, before turning on monocular depth-mapping and reading ToF sensor data to search an unknown area for ArUco markers. Deployed along with `swarmserver` on multiple drones will ensure that no two drones target the same marker.
 
 ## Quick Start Guide
 
@@ -25,10 +25,10 @@ pip install opencv-contrib-python
 ```
 
 ## To-Dos
-To Test 10 Feb
-- running two USA drones on the same computer ✔
-- running multiple clients on different computers, connected to the same network
-- clear detected = True if not updated for 10 seconds
+- ✔ running two USA drones on the same computer 
+- ✔ running multiple clients on different computers, connected to the same network
+- ✔ clear detected = True if not updated for 10 seconds 
+- Fix approach overshoot
 
 ## License
 

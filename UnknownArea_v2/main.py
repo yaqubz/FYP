@@ -28,7 +28,7 @@ def check_marker_server_and_lockon(controller:DroneController, marker_id:int, di
     """
     Logic discussed and settled between Yaqub and Gab
     Also works without a server, since .is_marker_available will return True
-    Can be tested remotely; Has worked well caa 14 Feb, 25 Feb, 5 Mar
+    Can be tested remotely; Has worked well caa 14 Feb, 25 Feb
     """
 
     if controller.marker_client.is_marker_available(marker_id) or marker_id == controller.markernum_lockedon:
@@ -72,20 +72,20 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
         logging.warning("Pausing, ToF error")
         return display_frame
 
-    if controller.depth_map_colors["middle_row"]["middle_center"]["red"] > controller.depth_map_colors["middle_row"]["middle_center"]["blue"]:
+    if controller.depth_map_colors["red"]["center"] > controller.depth_map_colors["blue"]["center"]:
         # Obstacle ahead - turn towards more open space
-        if controller.depth_map_colors["middle_row"]["middle_left"]["blue"] > controller.depth_map_colors["middle_row"]["middle_right"]["blue"]:
+        if controller.depth_map_colors["blue"]["left"] > controller.depth_map_colors["blue"]["right"]:
             controller.drone.send_rc_control(0, 0, 0, -controller.yaw_speed)
             cv2.putText(display_frame, "Turning Left", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            logger.info("Turning Left")
+            logging.info("Turning Left")
         else:
             controller.drone.send_rc_control(0, 0, 0, controller.yaw_speed)
             cv2.putText(display_frame, "Turning Right", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            logger.info("Turning Right")
+            logging.info("Turning Right")
     else:
-        if controller.depth_map_colors["middle_row"]["middle_center"]["blue"] > controller.depth_map_colors["middle_row"]["middle_center"]["red"] and tof_dist <= 800: #OG 700
+        if controller.depth_map_colors["blue"]["center"] > controller.depth_map_colors["red"]["center"] and tof_dist <= 800: #OG 700
             cv2.putText(display_frame, "Avoiding Corner", (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 2)
-            logger.info("Avoiding Corner")
+            logging.info("Avoiding Corner")
 
             # TBC TODO 26 FEB - ALWAYS AVOIDING CORNER
 
@@ -268,45 +268,14 @@ def navigation_thread(controller:DroneController):
                         if not centering_complete:
                             if abs(x_error) > centering_threshold:
                                 # Calculate yaw speed based on error
-
-                                # YZ WIP 5 MAR
-                                # if color shows blockage:
-                                #     slide left right
-                                # else:
-                                #     yaw
-
                                 yaw_speed = int(np.clip(x_error / 4, -20, 20))  # OG: / 10
                                 controller.drone.send_rc_control(0, 0, 0, yaw_speed)
                                 logging.info(f"Centering: error = {x_error:.1f}, yaw_speed = {yaw_speed}")
-                                if abs(x_error) < 25:
-                                  logging.debug(f"FOR TESTING: CENTERED MOVE BOX NOW")  
-                                  time.sleep(3)  # Stabilize
-                                
                             else:
                                 logging.info(f"Marker centered, x error = {x_error:.0f}px! Starting approach...")
                                 controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
                                 time.sleep(0.5)  # Stabilize
-                                logging.debug(f"YZ CODE STARTS HERE")  
-                                time.sleep(3)  # Stabilize
-                                
-                                # GAB 5 MAR - PRINT THIS FOR DEBUG EVEN WITH NO_FLY
-                                logging.debug(f"CENTRE SPLIT SHIT: {controller.depth_map_colors['middle_center_split']}")
-                                logging.debug(f"Centre-Left Red: {controller.depth_map_colors['middle_center_split']['left']["red"]}")
-                                logging.debug(f"Centre-Left Blue: {controller.depth_map_colors['middle_center_split']['left']["blue"]}")
-                                logging.debug(f"Centre-Right Red: {controller.depth_map_colors['middle_center_split']['right']["red"]}")
-                                logging.debug(f"Centre-Right Blue: {controller.depth_map_colors['middle_center_split']['right']["blue"]}")
-                                if controller.depth_map_colors["middle_center_split"]["left"]["red"] > controller.depth_map_colors["middle_center_split"]["left"]["blue"]:
-                                    controller.drone.move_right(20)
-                                    logging.info(f"Uh oh Pillar is blocking the approach, moving right!")
-                                elif controller.depth_map_colors["middle_center_split"]["right"]["red"] > controller.depth_map_colors["middle_center_split"]["right"]["blue"]:
-                                    controller.drone.move_left(20)
-                                    logging.info(f"Uh oh Pillar is blocking the approach, moving left!")
-                                else:
-                                    centering_complete = True
-                                    logging.info(f"NVM ALL IS GOOD CAN GO")
-                                    logging.info(f"Marker centered, x error = {x_error:.0f}px! Starting approach...")
-                                    controller.drone.send_rc_control(0, 0, 0, 0)  # Stop rotation
-                                    time.sleep(0.5)  # Stabilize
+                                centering_complete = True
                         
                         # PART 2B: APPROACH (I.E. CENTERING COMPLETE)
                         elif not approach_complete:
@@ -415,7 +384,6 @@ def navigation_thread(controller:DroneController):
                 
         except Exception as e:
             logging.error(f"Error in navigation: {e}. Continuing navigation.")      # 13 Feb: "ERROR - libav.h264 - error while decoding MB 57 29, bytestream -10" does not come here
-            raise
             # Don't cleanup or break - continue searching
             continue           
 
@@ -431,7 +399,7 @@ def main():
             controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
             init_yaw = controller.drone.get_yaw()
             # controller.takeoff_simul([11,17])  # just holds the drone until released. still needs takeoff() in the next line 
-            # controller.marker_client.client_takeoff_simul([99])     # USE THIS 5 MAR - change to marker client
+            controller.marker_client.client_takeoff_simul([99])     # change to marker client
             if not params.NO_FLY:
                 controller.drone.takeoff()
                 logging.info("Taking off for real...")
@@ -447,7 +415,7 @@ def main():
             time.sleep(params.TAKEOFF_HOVER_DELAY)
             if not params.NO_FLY:
                 logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
-                # execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+                execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
             else:
                 logging.info(f"Simulating executing waypoints {params.WAYPOINTS_JSON}")
                 
