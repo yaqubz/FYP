@@ -6,7 +6,7 @@
 Typically, drone only rotates and moves forward. It will only do otherwise for error correction using UWB.
 
 Since this is now a module in a package, run using `python -m PPFLY2.main` in the terminal.
-    python -m PPFLY2.main --simulate 1 --filename 'waypoint_30cm.json'
+    # python -m PPFLY2.main --simulate 1 --filename 'waypoint_30cm.json'
     python -m PPFLY2.main shared_params.params
 """
 

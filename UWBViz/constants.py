@@ -24,6 +24,7 @@ BGPIC = os.path.join(RESOURCES_DIR, "field2025_toscale.PNG")
 WAYPOINTS_JSON_DEFAULT = "waypoint20x20.json"
 
 MARKEDPOINTS_JSON_DEFAULT = "uwb_trace"
+MARKEDWAYPOINTS_JSON_DEFAULT = "waypoints_uwb"
 
 # Tag colors for different UWB tags
 TAG_COLORS = [

@@ -1,10 +1,10 @@
-import pygame
-import json
-import time
-from .constants import *
-from typing import List, Dict, Any
+import pygame, json, time, math
+from typing import List, Dict, Any, Tuple
 import tkinter as tk
 from tkinter import simpledialog, messagebox
+from datetime import datetime
+
+from .constants import *
 
 class Background:
     def __init__(self, image_path):
@@ -43,7 +43,7 @@ def load_waypoints():
     """
     Only loads all the waypoints if the LAST waypoint is provided (i.e. distance,angle = 0,0)
     """
-    user_input = simpledialog.askstring("Load Waypoints", 
+    user_input = simpledialog.askstring("Load Waypoints (cancel to clear)", 
                                         f"Enter JSON filename to load (without .json extension) \nDefault: {WAYPOINTS_JSON_DEFAULT}")
         
     filename = WAYPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
@@ -96,7 +96,7 @@ class Visualization:
         ]
         pygame.draw.polygon(self.screen, RED, points, 2)
 
-    def draw_waypoints(self, waypoints):
+    def draw_loaded_waypoints(self, waypoints):
         if not waypoints:
             return
         
@@ -106,6 +106,20 @@ class Visualization:
             pygame.draw.circle(self.screen, BLUE, point, 5)
             if i > 0:
                 pygame.draw.line(self.screen, RED, screen_coords[i-1], point, 2)
+
+    # def draw_new_waypoints(self, waypoints):
+
+    #     print(f"NEW WAYPOINTS: {waypoints}")
+
+    #     if not waypoints:
+    #         return
+        
+    #     screen_coords = [self.coord_system.screen_coordinates(point['x'], point['y']) for point in waypoints]
+        
+    #     for i, point in enumerate(screen_coords):
+    #         pygame.draw.circle(self.screen, BLUE, point, 5)
+    #         if i > 0:
+    #             pygame.draw.line(self.screen, RED, screen_coords[i-1], point, 2)
 
     def update_positions(self, positions_df):
         current_time = time.time()
@@ -150,8 +164,8 @@ class Visualization:
                 label = font.render(f"#{int(tag_id)} ({x:.1f}, {y:.1f})", True, color)
                 self.screen.blit(label, (screen_x + 10, screen_y - 10))
 
-    def draw_marked_positions(self, marked_positions:List[Dict[str, Any]]):
-        """Draw walls, victims, dangers, and pillars on the screen."""
+    def draw_marked_positions(self, marked_positions: List[Dict[str, Any]]):
+        """Draw walls, victims, dangers, and waypoints on the screen."""
         
         walls = []
         current_wall_start = None
@@ -193,17 +207,24 @@ class Visualization:
             screen_x, screen_y = self.coord_system.screen_coordinates(pillar["x"], pillar["y"])
             pygame.draw.circle(self.screen, (0, 0, 0), (screen_x, screen_y), 10, 2)
 
+        # Draw waypoints as blue circles with red lines
+        # waypoints = [p for p in marked_positions if p["type"] == "waypoint"]
+        # self.draw_new_waypoints(waypoints)
+        waypoints = [(p['x'], p['y']) for p in marked_positions if p["type"] == "waypoint"]
+        self.draw_loaded_waypoints(waypoints)
+
 class RecordingManager:
     def __init__(self):
         self.recording:bool = False
         self.recording_wall:bool = False
         self.recorded_points: List[Dict[str, Any]] = [] # Ordered list of points. Each point is a dictionary with {x: y: z: etc.}
+        self.recorded_waypoints: List[Dict[str, Any]] = []  # New list to store waypoints
         self.current_wall_id:int = 0  # To identify different walls
         
     def start_recording(self):
         """Start a new recording session"""
         self.recording:bool = True
-        # self.recorded_points = []
+        # self.recorded_points = []     # To reset recored_points every time starting recording - NOT NECESSARY
         print("[INFO] Ready to record. Hotkeys: W-Walls (toggle on/off) | P-Pillars | V-Victims")
         
     def stop_recording(self, prev_loaded_points=None):
@@ -224,41 +245,65 @@ class RecordingManager:
         if self.recorded_points:
             user_input = simpledialog.askstring("Save Marked Positions", 
                                         f"Enter JSON filename to save (without .json extension and UWBViz/ directory) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
-            
-            filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else filename
-        
-            full_filename = f"UWBViz/{filename}.json"
-            
-        # Count pillars, victims, and danger points *before* creating the JSON
-            total_pillars = 0
-            total_victims = 0
-            total_danger = 0
 
-            for point in self.recorded_points:  # Assuming self.recorded_points is your list of points
-                point_type = point.get("type")  # Use .get() to avoid KeyError if "type" is missing
-                if point_type == "pillar":  # Adjust the type names as needed
-                    total_pillars += 1
-                elif point_type == "victim":
-                    total_victims += 1
-                elif point_type == "danger":
-                    total_danger += 1
+            if user_input is None:  # User clicked Cancel
+                print('Points not saved.')
+                return  
+            else:
+                filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else user_input
+                full_filename = f"UWBViz/{filename}.json"
+            
+                # Count pillars, victims, and danger points *before* creating the JSON
+                total_pillars = 0
+                total_victims = 0
+                total_danger = 0
+                total_waypoints = 0
 
-            with open(full_filename, 'w') as f:
-                json.dump({
-                    'points': self.recorded_points,
-                    'metadata': {   # for user reference only! not used elsewhere
-                        'total_points': len(self.recorded_points),
-                        'total_wall_segments': self.current_wall_id,
-                        'total_pillars': total_pillars,
-                        'total_victims': total_victims,
-                        'total_danger': total_danger
+                for point in self.recorded_points:  # Assuming self.recorded_points is your list of points
+                    point_type = point.get("type")  # Use .get() to avoid KeyError if "type" is missing
+                    if point_type == "pillar":  # Adjust the type names as needed
+                        total_pillars += 1
+                    elif point_type == "victim":
+                        total_victims += 1
+                    elif point_type == "danger":
+                        total_danger += 1
+                    elif point_type == "waypoint":
+                        total_waypoints += 1
+
+                json_data = {
+                        'points': self.recorded_points,
+                        'metadata': {   # for user reference only! not used elsewhere
+                            'total_points': len(self.recorded_points),
+                            'total_wall_segments': self.current_wall_id,
+                            'total_pillars': total_pillars,
+                            'total_victims': total_victims,
+                            'total_danger': total_danger,
+                            'total_waypoints': total_waypoints
+                        }
                     }
-                }, f, indent=4)
-            print(f"[INFO] Recording saved to {full_filename}")
+                with open(full_filename, 'w') as f:
+                    json.dump(json_data, f, indent=4)
+                print(f"[INFO] Recorded positions and waypoints saved to {full_filename}")
 
-        return filename
+                # NEW - save waypoints separately
+                if total_waypoints > 0:
+                    user_input = simpledialog.askstring("Save Marked Waypoints Separately?", 
+                                        f"Enter JSON filename to save waypoints separately (without .json extension and UWBViz/ directory) \nDefault: {MARKEDWAYPOINTS_JSON_DEFAULT}")
+                    if user_input is None:  # User clicked Cancel
+                        print('Waypoints not saved separately.')
+                    else:
+                        waypoints_filename = MARKEDWAYPOINTS_JSON_DEFAULT if user_input == "" else user_input
+                        waypoints_full_filename = f"UWBViz/{waypoints_filename}.json"
+
+                        converted_json_data = convert_json(json_data)
+                    
+                        with open(waypoints_full_filename, 'w') as f:
+                            json.dump(converted_json_data, f, indent=4)
+                        print(f"[INFO] Recorded waypoints saved to {waypoints_full_filename}")
+                         
+                return filename
             
-        # self.recorded_points = []
+        # self.recorded_points = []     # This resets recorded_points after saving. Not necessary!
         
     def prompt_merge(self) -> bool:
         """Prompts the user with a yes/no dialog for merging positions."""
@@ -287,7 +332,7 @@ class RecordingManager:
         else:
             print("[WARNING] Recording not enabled. Press R to enable.")
             
-    def add_point(self, x:float, y:float, z:float, point_type:str = ('pillar', 'wall', 'wall_start', 'wall_end', 'victim', 'danger'), wall_id=None):
+    def add_point(self, x:float, y:float, z:float, point_type:str = ('pillar', 'wall', 'wall_start', 'wall_end', 'victim', 'danger', 'waypoint'), wall_id=None):
         """Add a point to the recording with its type."""
         x, y, z = round(x,2), round(y,2), round(z,2)
         if self.recording:
@@ -304,12 +349,31 @@ class RecordingManager:
             print(f"[INFO] {point_type.capitalize()} recorded at {x},{y}")
         else:
             print("[WARNING] Recording not enabled. Press R to enable.")
+
+
+    def add_waypoint(self, x: float, y: float, z: float):
+        """Add a waypoint to the recording."""
+        x, y, z = round(x, 2), round(y, 2), round(z, 2)
+        if self.recording:
+            waypoint = {
+                'x': x,
+                'y': y,
+                'z': z,
+                'type': 'waypoint'
+            }
+            # self.recorded_waypoints.append(waypoint)
+            self.recorded_points.append(waypoint)
+
+            print(f"[INFO] Waypoint recorded at {x},{y}")
+        else:
+            print("[WARNING] Recording not enabled. Press R to enable.")
             
     def remove_last_obj(self):
         if self.recording and not self.recording_wall and self.recorded_points:
             if self.recorded_points[-1].get("type", None) == "wall_end":
                 print(f"Removing walls. {self.recorded_points[-2:]}")
                 self.recorded_points = self.recorded_points[0:-2]
+                self.current_wall_id -= 1
                 
             else:
                 print(f"Removing point. {self.recorded_points[-1]}")
@@ -324,3 +388,123 @@ class RecordingManager:
 def distance(point1, point2):
     """Calculate Euclidean distance between two points"""
     return ((point1['x'] - point2['x'])**2 + (point1['y'] - point2['y'])**2)**0.5
+
+def convert_json(json_a: Dict) -> Dict:
+    """
+    Converts marked points json to waypoints json, readable by execute_waypoints.
+    
+    Args:
+        json_a (dict): Marked points json generated by UWBViz, which includes waypoints, together with obstacles, walls, etc. 
+    
+    Returns:
+        dict: Waypoints json readable by execute_waypoints. To be saved as json separately.
+    """
+    # Extract waypoints from JSON A
+    waypoints = [point for point in json_a["points"] if point["type"] == "waypoint"]
+    
+    # Convert UWB coordinates (meters) to cm
+    waypoints_cm = [
+        {
+            "x": point["x"] * 100,  # Convert meters to cm
+            "y": point["y"] * 100   # Convert meters to cm
+        }
+        for point in waypoints
+    ]
+    
+    # Calculate distance and angle between consecutive waypoints
+    wp_list = []
+    for i in range(len(waypoints_cm)):
+        current_wp = waypoints_cm[i]
+        
+        if i < len(waypoints_cm) - 1:
+            next_wp = waypoints_cm[i + 1]
+            
+            # Calculate distance in cm
+            dx = next_wp["x"] - current_wp["x"]
+            dy = next_wp["y"] - current_wp["y"]
+            dist_cm = math.hypot(dx, dy)
+            
+            # Calculate yaw angle in degrees
+            if i == 0:  # Initial heading correction
+                # Dummy point to simulate initial heading (180 degrees, facing forward)
+                dummy_point = (current_wp["x"], current_wp["y"] - 10)  # 10 cm behind the first waypoint
+                # Convert current_wp and next_wp to tuples for get_yaw_angle
+                current_wp_tuple = (current_wp["x"], current_wp["y"])
+                next_wp_tuple = (next_wp["x"], next_wp["y"])
+                angle_deg = get_yaw_angle(dummy_point, next_wp_tuple, current_wp_tuple) - 0  # Adjust for initial heading
+                if angle_deg > 180:
+                    angle_deg -= 360
+                elif angle_deg < -180:
+                    angle_deg += 360
+            else:
+                # Calculate yaw angle between previous, current, and next waypoints
+                prev_wp = waypoints_cm[i - 1]
+                # Convert waypoints to tuples for get_yaw_angle
+                prev_wp_tuple = (prev_wp["x"], prev_wp["y"])
+                current_wp_tuple = (current_wp["x"], current_wp["y"])
+                next_wp_tuple = (next_wp["x"], next_wp["y"])
+                angle_deg = get_yaw_angle(prev_wp_tuple, next_wp_tuple, current_wp_tuple)
+        else:
+            # Final waypoint has dist_cm = 0 and angle_deg = 0
+            dist_cm = 0
+            angle_deg = 0
+        
+        # Append to wp_list
+        wp_list.append({
+            "dist_cm": round(dist_cm),
+            "angle_deg": round(angle_deg),
+            "position_cm": {
+                "x": round(current_wp["x"]),
+                "y": round(current_wp["y"])
+            }
+        })
+    
+    # Create JSON B structure
+    json_b = {
+        "README": "JSON stores current waypoint and distance + angle to NEXT waypoint. Final waypoint has dist_cm = angle_deg = 0.",
+        "wp": wp_list,
+        "competition_notice": "This path was planned in a test area. Scale adjustments needed for 20m x 20m competition field.",
+        "datetime": datetime.now().strftime("%m %d %H:%M")  # Add current date and time
+    }
+    
+    return json_b
+
+
+def get_yaw_angle(pos0: Tuple[float, float], pos1: Tuple[float, float], posref: Tuple[float, float]) -> float:
+    """
+    Calculate the change in heading required to rotate from the direction vector 'pos0 -> posref'
+    to align with the direction vector 'posref -> pos1'.
+    
+    Args:
+        pos0 (Tuple[float, float]): Previous waypoint (x, y).
+        pos1 (Tuple[float, float]): Next waypoint (x, y).
+        posref (Tuple[float, float]): Current waypoint (x, y).
+    
+    Returns:
+        float: Yaw angle in degrees. Positive for counterclockwise, negative for clockwise.
+    """
+    # Define the vectors from the points
+    v1x, v1y = posref[0] - pos0[0], posref[1] - pos0[1]  # Vector from pos0 to posref
+    v2x, v2y = pos1[0] - posref[0], pos1[1] - posref[1]  # Vector from posref to pos1
+
+    # Calculate the dot product and magnitudes of v1 and v2
+    dot_product = v1x * v2x + v1y * v2y
+    mag_v1 = math.hypot(v1x, v1y)
+    mag_v2 = math.hypot(v2x, v2y)
+
+    # Ensure there's no division by zero if any vector has zero magnitude
+    if mag_v1 * mag_v2 == 0:
+        return 0.0
+    
+    # Calculate the angle's magnitude (in radians) using the dot product
+    cos_theta = dot_product / (mag_v1 * mag_v2)
+    cos_theta = max(-1.0, min(1.0, cos_theta))  # Clamp to avoid floating-point errors
+    angle_rad = math.acos(cos_theta)
+    angle_deg = math.degrees(angle_rad)
+
+    # Use the cross product to determine the sign (direction) of the angle
+    cross_product = v1x * v2y - v1y * v2x
+    if cross_product < 0:  # Flip the sign to match CCW = +ve, CW = -ve
+        angle_deg = -angle_deg
+
+    return angle_deg
