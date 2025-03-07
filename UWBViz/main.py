@@ -47,9 +47,9 @@ class UWBVisualization:
         self.last_mouse_pos = None
         self.waypoints = []
         self.loaded_marked_pos = None
-        self.loaded_marked_pos_filename:str = None  
+        self.loaded_marked_pos_filename: str = None  
 
-        self.last_cmdline:str = None        # Disabled 15 Feb - too complex to implement printing cmdline on pygame
+        self.last_cmdline: str = None        # Disabled 15 Feb - too complex to implement printing cmdline on pygame
         
         # Mouse simulation variables
         self.mouse_simulation = False
@@ -76,9 +76,12 @@ class UWBVisualization:
         #                                     f"Enter JSON filename to load (without .json extension) \nDefault: {MARKEDPOINTS_JSON_DEFAULT}")
             
         #     filename = MARKEDPOINTS_JSON_DEFAULT if user_input == "" else f"{user_input}.json"
-
-        full_filename = f"UWBViz/{filename}.json"
-        print(f"Full filename: {full_filename}")
+        if filename:
+            full_filename = f"UWBViz/{filename}.json"
+            print(f"Full filename: {full_filename}")
+        else:
+            print("No filename provided. Not loading.")
+            return
 
         try:
             with open(full_filename, 'r') as f:
@@ -127,7 +130,7 @@ class UWBVisualization:
             json_files.insert(0, MARKEDPOINTS_JSON_DEFAULT)
         
         # Create label
-        tk.Label(dialog_window, text=f"Select JSON file to load:\nCurrently loaded: {self.loaded_marked_pos_filename}").pack(pady=10)
+        tk.Label(dialog_window, text=f"Select JSON file to load:\nLast loaded: {self.loaded_marked_pos_filename}").pack(pady=10)
         
         # Create combobox (dropdown)
         filename_var = tk.StringVar(value=MARKEDPOINTS_JSON_DEFAULT)
@@ -156,6 +159,7 @@ class UWBVisualization:
             self.loaded_marked_pos = None
             self.recording_manager.recorded_points = []
             self.recording_manager.current_wall_id = 0
+            self.loaded_marked_pos_filename = None
             dialog_window.destroy()
         
         # Handle Enter key press to load
@@ -290,9 +294,7 @@ class UWBVisualization:
         self.coord_system.offset_y += (mouse_y - new_screen_y)
 
     def handle_keypress(self, key):
-
         current_pos = None
-        # IMPT: Takes current_pos (for recording) as the (1) last tag ID OR (2) simulated mouse movements
         if self.mouse_simulation:
             mouse_x, mouse_y = pygame.mouse.get_pos()
             uwb_x, uwb_y = self.coord_system.uwb_coordinates(mouse_x, mouse_y)
@@ -313,50 +315,37 @@ class UWBVisualization:
             self.pause_data_thread()
             self.waypoints = load_waypoints()
             self.resume_data_thread()
-  
-         # NEW 15 FEB - FOR MOUSE SIMULATION
-
         elif key == pygame.K_u:  # Toggle mouse simulation
             self.mouse_simulation = not self.mouse_simulation
             if self.mouse_simulation:
                 print("[INFO] Mouse simulation enabled")
             else:
                 print("[INFO] Mouse simulation disabled")
-
-        # NEW 15 FEB - FOR WALL RECORDING
-
         elif key == pygame.K_r:  # Toggle recording
             if not self.recording_manager.recording:
                 self.recording_manager.start_recording()
             else:
                 filename = self.recording_manager.stop_recording(self.loaded_marked_pos)
                 self.load_marked_positions(filename)
-                
         elif key == pygame.K_w and current_pos:  # Toggle wall recording
-            self.recording_manager.toggle_wall(
-                current_pos['x'], 
-                current_pos['y'], 
-                current_pos['z']
-            )
-            
+            self.recording_manager.toggle_wall(current_pos['x'], current_pos['y'], current_pos['z'])
         elif key == pygame.K_p and current_pos:  # Add pillar obstacle
             self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'pillar')
-        elif key == pygame.K_v:
+        elif key == pygame.K_v and current_pos:
             self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'victim')
-        elif key == pygame.K_d:
+        elif key == pygame.K_d and current_pos:
             self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'danger')
-
+        elif key == pygame.K_1 and current_pos:
+            # self.recording_manager.add_waypoint(current_pos['x'], current_pos['y'], current_pos['z'])
+            self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'waypoint')
         elif key == pygame.K_z:
             self.recording_manager.remove_last_obj()
-
         elif key == pygame.K_m:
-            # self.load_marked_positions()
             result = self.marked_points_dialog()
             if result:
                 print("Marked points loaded successfully")
             else:
                 print("Marked points not loaded")
-
 
     def pause_data_thread(self):
         print("[INFO] Pausing data collection thread. Please type input in the terminal.")
@@ -372,17 +361,6 @@ class UWBVisualization:
         
         if current_positions is not None:
             self.visualization.update_positions(current_positions)
-            
-            # DISABLED 15 Feb - this records ALL points between wall start and end (not yet implemented)
-            # if self.recording_manager.recording and self.recording_manager.recording_wall and not current_positions.empty:
-            #     last_pos = current_positions.iloc[-1]
-            #     self.recording_manager.add_point(
-            #         last_pos['x'], 
-            #         last_pos['y'], 
-            #         last_pos.get('z', 0),
-            #         point_type='wall',
-            #         wall_id=self.recording_manager.current_wall_id
-            #     )
 
     def draw(self):
         self.screen.fill(BACKGROUND_COLOR)
@@ -393,39 +371,50 @@ class UWBVisualization:
         self.background.draw(self.screen, self.coord_system.scale_factor, self.coord_system.screen_coordinates)
         self.visualization.draw_grid()
         self.visualization.draw_rectangle()
-        self.visualization.draw_waypoints(self.waypoints)
-        self.visualization.draw_positions()
-        if self.loaded_marked_pos:      # Draws pre-loaded positions
+        self.visualization.draw_positions()  # Draw UWB positions
+
+        self.visualization.draw_loaded_waypoints(self.waypoints)  # Draw pre-loaded waypoints
+        
+        if self.loaded_marked_pos:  # Draws pre-loaded positions
             self.visualization.draw_marked_positions(self.loaded_marked_pos)
 
-        if self.recording_manager.recorded_points:
+        if self.recording_manager.recorded_points:  # Draw marked positions and newly marked waypoints
             self.visualization.draw_marked_positions(self.recording_manager.recorded_points)
 
-        
-        
+        # Draw white boxes behind text for better readability
         if self.recording_manager.recording:
             font = pygame.font.Font(None, 36)
-            status = f"Recording Wall {self.recording_manager.current_wall_id}..." if self.recording_manager.recording_wall else "Ready to Record"
+            status = f"Recording Wall {self.recording_manager.current_wall_id}..." if self.recording_manager.recording_wall else "Ready to Record (press R to stop recording)"
             self.last_cmdline = status
             text = font.render(status, True, (255, 0, 0))
-            self.screen.blit(text, (10, 10))
+            
+            # Calculate the size of the text and create a white box behind it
+            text_width, text_height = font.size(status)
+            pygame.draw.rect(self.screen, (255, 255, 255), (25, 5, text_width + 10, text_height + 10))  # White box
+            self.screen.blit(text, (30, 10))  # Blit text on top of the white box
 
         # Instructions
         font = pygame.font.Font(None, 25)
         instructions = "ESC: exit, SPACE: toggle trails, ENTER: toggle pan & zoom, L: load waypoints"
         instructions2 = "R: toggle recording, W: toggle walls, V/D/P: mark Victims/Dangers/Pillars, M: load markers"
+        
+        # Render instructions text
         text = font.render(instructions, True, (0, 0, 0))
         text2 = font.render(instructions2, True, (0, 0, 0))
-        self.screen.blit(text, (10, 40))
-        self.screen.blit(text2, (10, 70))
-
-
-        # 15 Feb: Last printed commandline (possible but nah too tedious)
-        # text3 = font.render(self.last_cmdline, True, (0,0,0))
-        # self.screen.blit(text3, (10, 200))
         
+        # Calculate the size of the instructions text and create white boxes behind them
+        text_width, text_height = font.size(instructions)
+        text2_width, text2_height = font.size(instructions2)
+        
+        # Draw white boxes behind the instructions
+        pygame.draw.rect(self.screen, (255, 255, 255), (25, 35, text_width + 10, text_height + 10))  # White box for instructions
+        pygame.draw.rect(self.screen, (255, 255, 255), (25, 65, text2_width + 10, text2_height + 10))  # White box for instructions2
+        
+        # Blit instructions text on top of the white boxes
+        self.screen.blit(text, (30, 40))
+        self.screen.blit(text2, (30, 70))
+
         pygame.display.update()
-    
 
     def run(self):
         clock = pygame.time.Clock()
