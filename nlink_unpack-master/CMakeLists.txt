@@ -2,8 +2,8 @@
 
 cmake_minimum_required(VERSION 3.0.0)
 
-# Define a variable for the executable name - CHANGE THIS AS NEEDED!
-set(TARGET_NAME nlink_unpack_COMx_udp)
+# Define a variable for the executable name ---- INSERT OUTPUT .EXE NAME HERE
+set(TARGET_NAME nlink_unpack_COMx_udp2)    
 
 project(${TARGET_NAME} VERSION 0.1.0) # project name is not necessarily the executable name, but set same here for consistency
 include(CTest)
@@ -11,7 +11,7 @@ enable_testing()
 
 add_executable(
   ${TARGET_NAME}
-  main_udp.c
+  main_udpmedianv2.c  # ---- INSERT SOURCE CODE HERE
   src/nlink_utils.c
   src/nlink_linktrack_nodeframe0.c
   src/nlink_linktrack_nodeframe1.c

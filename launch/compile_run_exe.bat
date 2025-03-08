@@ -6,7 +6,8 @@ cd "nlink_unpack-master\build"
 cmake ..
 cmake --build . --config Release
 
-.\Release\nlink_unpack_COMx_udp.exe
+@REM .\Release\nlink_unpack_COMx_udp.exe
+.\Release\nlink_unpack_COMx_udp2.exe      @REM ---- CHANGE .exe FILENAME HERE!!
 
 @REM To return to main workspace
 cd ../..
