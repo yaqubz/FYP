@@ -4,7 +4,7 @@
 @REM OPTION 1: Remember to connect to SCORPION_4 before running
 @REM start ssh telloswarm@192.168.0.111 "sudo iwlist wlan0 scan | grep ESSID && sudo nmcli device wifi connect 'RMTT-3B131A' --ask"
 
-start ssh -t telloswarm@192.168.0.111 "sudo iwlist wlan0 scan | grep ESSID && sudo nmcli device wifi connect 'RMTT-3B131A' --ask; bash"
+start ssh -t telloswarm@192.168.0.111 "sudo iwlist wlan0 scan | grep ESSID && sudo nmcli device wifi connect 'RMTT-3B256C' password 'telloswarm' --ask; bash"
 
 
 

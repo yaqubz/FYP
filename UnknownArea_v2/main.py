@@ -373,6 +373,8 @@ def navigation_thread(controller:DroneController):
 
             # Resize depth_colormap to match frame dimensions, create combined view side-by-side
             depth_colormap_resized = cv2.resize(controller.depth_colormap, (display_frame.shape[1]//2, display_frame.shape[0]))
+            if not params.LAPTOP_ONLY:
+                display_frame = cv2.cvtColor(display_frame, cv2.COLOR_BGR2RGB)
             combined_view = np.hstack((display_frame, depth_colormap_resized))
             
             # Add labels and display combined view
@@ -398,8 +400,8 @@ def main():
         with controller.forward_tof_lock:    
             controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
             init_yaw = controller.drone.get_yaw()
-            # controller.takeoff_simul([11,17])  # just holds the drone until released. still needs takeoff() in the next line 
-            controller.marker_client.client_takeoff_simul([99])     # change to marker client
+            controller.takeoff_simul([11,17])  # just holds the drone until released. still needs takeoff() in the next line 
+            # controller.marker_client.client_takeoff_simul([99])     # change to marker client
             if not params.NO_FLY:
                 controller.drone.takeoff()
                 logging.info("Taking off for real...")
@@ -414,10 +416,16 @@ def main():
             
             time.sleep(params.TAKEOFF_HOVER_DELAY)
             if not params.NO_FLY:
-                logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
-                execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+                try:
+                    logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
+                    execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+                except Exception as e:
+                    logging.error(f"Error: {e}. DID NOT COMPLETE WAYPOINTS. Continuing on...")       # can just comment out WAYPOINTS_JSON in params
             else:
-                logging.info(f"Simulating executing waypoints {params.WAYPOINTS_JSON}")
+                try:
+                    logging.info(f"Simulating executing waypoints {params.WAYPOINTS_JSON}")
+                except Exception as e:
+                    logging.error(f"Error: {e}. DID NOT SIMULATE WAYPOINTS. Continuing on...")
                 
         # Only start video stream and ToF thread after completing waypoints
         controller.setup_stream()
