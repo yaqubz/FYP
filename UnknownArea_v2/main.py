@@ -555,31 +555,35 @@ def main():
     libav_logger.addHandler(hover_handler)
     
     try:
-        if not params.NO_FLY:
-            with controller.forward_tof_lock:
-                controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
-                
-                # controller.takeoff_simul([11,17])     # OUTDATED
-                # controller.marker_client.client_takeoff_simul([99], status_message=f"{controller.drone.get_battery()}%") 
+        with controller.forward_tof_lock:    
+            controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
+            init_yaw = controller.drone.get_yaw()
+            controller.marker_client.client_takeoff_simul([99])     # just holds the drone until released. still needs takeoff() in the next line 
+            if not params.NO_FLY:
                 controller.drone.takeoff()
-                logger.info("Taking off for real...")
-                controller.marker_client.send_update('status', status_message=f'Flying at {controller.drone.get_battery()}%')
-                controller.drone.send_rc_control(0, 0, 0, 0)
-                # time.sleep(params.TAKEOFF_HOVER_DELAY)
-                if not params.NO_FLY:
-                    try:
-                        logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
-                        execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)       # cannot use land callback while executing waypoints; use ctrl-c !
-                    except Exception as e:
-                        logging.error(f"Error: {e}. DID NOT COMPLETE WAYPOINTS. Continuing on...")       # can just comment out WAYPOINTS_JSON in params
-                else:
-                    try:
-                        logging.info(f"Simulating executing waypoints {params.WAYPOINTS_JSON}")
-                    except Exception as e:
-                        logging.error(f"Error: {e}. DID NOT SIMULATE WAYPOINTS. Continuing on...")
-        else:
-            logger.info("Simulating takeoff. Drone will NOT fly.")
-        time.sleep(2)
+                logging.info("Taking off for real...")
+            else:
+                logging.info("Simulating taking off for real...")
+            controller.marker_client.send_update('status', status_message=f'Taking off. {controller.drone.get_battery()}%')
+            controller.drone.send_rc_control(0, 0, 0, 0)
+            time.sleep(1)
+            post_yaw = controller.drone.get_yaw()
+            yaw_back = post_yaw - init_yaw
+            logging.debug(f"Init yaw: {init_yaw}, Post yaw: {post_yaw}, Normalize: {normalize_angle(yaw_back)}")
+            
+            # time.sleep(params.TAKEOFF_HOVER_DELAY)
+
+            if not params.NO_FLY:
+                try:
+                    logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
+                    execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
+                except Exception as e:
+                    logging.error(f"Error: {e}. DID NOT COMPLETE WAYPOINTS. Continuing on...")       # can just comment out WAYPOINTS_JSON in params
+            else:
+                try:
+                    logging.info(f"Simulating executing waypoints {params.WAYPOINTS_JSON}")
+                except Exception as e:
+                    logging.error(f"Error: {e}. DID NOT SIMULATE WAYPOINTS. Continuing on...")
         
         # Setup video stream (this starts the _stream_video thread which only updates frames)
         controller.setup_stream()

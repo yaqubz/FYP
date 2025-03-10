@@ -16,6 +16,7 @@ from .shared_utils import *
 
 """
 17 Feb LATEST Testing - V2 for Simultaneous takeoff and integrating ALL controllers
+11 Mar Almost Stable - Moved takeoff_simul to MarkerClient; Midas into centre subsections
 """
 
 class DroneController:
@@ -45,23 +46,27 @@ class DroneController:
         # Initialize Swarm Client
         self.marker_client = MarkerClient(drone_id = drone_id, land_callback=self.handle_land_signal)
 
-        ## COMMENT OUT BELOW FOR TESTING ------------------------------------
-
-        self.drone.connect()
-        logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
-
-        
-        # 19 FEB NEW Video Stream Properties
-        
+        # Video Stream Properties        
         self.current_frame = None
         self.display_frame = None
         self.frame_lock = Lock()
         self.stream_thread = None
         self.stop_event = Event()
 
-            
-        ## COMMENT OUT ABOVE FOR TESTING----------------------------------
+        ## COMMENT OUT BELOW FOR TESTING MULTIPLE DRONES USING NO_FLY = FALSE ON LAPTOP ONLY (USEFUL FOR TESTING CLIENTS REMOTELY), BUT ALSO NEED TO COMMENT OUT ALL OTHER GET.BATTERY() ETC. ------------------------------------
 
+        self.drone.connect()
+        logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
+
+        if not self.laptop_only:
+            start_time = time.time()
+            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
+            self.drone.set_video_fps(self.drone.FPS_15)
+            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
+            duration = time.time() - start_time
+            logging.debug(f"Video stream parameters set in {duration:.1f}s")
+        
+        ## COMMENT OUT ABOVE FOR TESTING. ALTERNATIVELY, USE MULTIPLE LAPTOP_ONLY = TRUE ----------------------------------
 
         # Color depth map
         self.depth_map_colors = {}
@@ -115,12 +120,6 @@ class DroneController:
         start_time = time.time()
         self.drone.streamon()
         self.frame_reader = self.drone.get_frame_read()
-
-        if not self.laptop_only:
-            # Set video stream properties to reduce latency (TBC: MOVE THIS BEFORE DRONE TAKES OFF?)
-            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
-            self.drone.set_video_fps(self.drone.FPS_15)
-            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
         self.start_video_stream(imshow=self.imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
         logging.info(f"Initializing frame reader... imshow = {self.imshow}")
         time_taken = time.time() - start_time
@@ -131,12 +130,9 @@ class DroneController:
         """
         NEW, TESTING 1 MAR
         Callback function to handle the land signal. 
+        Does not work during execute_waypoints!
         """
         logging.info(f"Land signal received for Tello {self.drone_id}. Shutting down...")
-        # self.stop_event.set()
-        # self.stop_tof_thread()
-        # self.stop_video_stream()
-        # self.drone.end()
         self.shutdown()
         self.marker_client.land_signal = False  # Reset the flag
 
@@ -191,76 +187,11 @@ class DroneController:
                 logging.error(f"Error in video stream: {e}")
                 time.sleep(0.1)
         logging.info("_stream_video exited.")        
-        # self._cleanup()
         self.shutdown()
-
-
-            
-    # def _stream_video(self, imshow:bool = True):
-    #     """Video streaming thread function"""
-    #     while not self.stop_event.is_set():
-    #         try:
-    #             # Capture new frame
-    #             frame = capture_frame(self.frame_reader)
-    #             if frame is None:
-    #                 continue
-                    
-    #             # Store frame thread-safely
-    #             with self.frame_lock:
-    #                 self.current_frame = frame.copy()
-                
-    #             # Display the frame
-    #             display_frame = self.get_display_frame()
-    #             if display_frame is not None and imshow:
-    #                 cv2.imshow(f"Drone View {self.drone_id}", display_frame)
-
-    #             # Handle keyboard input
-    #             key = cv2.waitKey(1)
-    #             if key != -1:
-    #                 if key == ord('q'):
-    #                     logging.info("Quit command received")
-    #                     self.stop_event.set()
-    #                     break
-    #                 elif key == ord('l'):
-    #                     logging.debug("DEBUG LOGPOINT")
-    #                 # Handle any additional key commands
-    #                 self.handle_key_command(key)
-
-    #         except Exception as e:
-    #             logging.error(f"Error in video stream: {e}")
-    #             time.sleep(0.1)
-                
-    #     self._cleanup()
-    
-    #In the _stream_video() thread, simply update the current frame:
-    
-    # def _stream_video(self, imshow: bool = True):
-    #     while not self.stop_event.is_set():
-    #         try:
-    #             frame = capture_frame(self.frame_reader)
-    #             if frame is None:
-    #                 continue
-    #             with self.frame_lock:
-    #                 self.current_frame = frame.copy()
-    #         except Exception as e:
-    #             logging.error(f"Error in video stream: {e}")
-    #             time.sleep(0.1)
 
     def handle_key_command(self, key):
         """Handle keyboard commands - can be overridden by subclasses"""
         pass
-
-    ## END OF NEW VIDEO 
-    
-    def takeoff_simul(self, drones_list:list):
-        """
-        Waits for a takeoff signal before taking off.
-        """
-        self.marker_client.send_takeoff_request(drones_list)
-        while not self.marker_client.takeoff_signal:
-            time.sleep(0.1)  # Wait for takeoff command
-        logging.info(f"Tello {self.drone_id} is taking off!")
-        self.drone.takeoff()
 
     def generate_color_depth_map(self, frame):
         """Process frame through MiDaS to get depth map"""
@@ -380,7 +311,6 @@ class DroneController:
                 logging.error(f"Error in ToF thread: {e}")
                 time.sleep(0.1)
         logging.info("_tof_thread exited.")
-        # self._cleanup()
 
     def start_tof_thread(self):
         """Start the forward ToF reading in a separate thread"""
@@ -414,38 +344,6 @@ class DroneController:
             self.drone.streamoff()
         else:
             logging.warning("Trying to shutdown, but already shut down previously.")
-
-    def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
-        """
-        TODO 19 FEB - doesnt work; can also take in an argument to set the actual current pos? inspo PPFLY2
-
-        :args:
-        rotation_deg: input given in as GUI json (i.e. +ve ccw) 
-
-        (Dead reckoning) Update the drone's position and store it in the waypoints_executed list.
-        Also stores the distance travelled / degrees rotated in the previous command.
-        Assumes drone rotates and only travels forward in straight lines.
-            Drone's rotation is +ve in the clockwise direction (i.e. turning right)
-            GUI's rotation (and by extension, waypoints.json) is +ve in the anticlockwise direction (i.e. turning left)
-        
-        """
-        rad = math.radians(rotation_deg)
-        new_x = self.my_current_pos[0] + int(distance_cm * math.sin(rad))
-        new_y = self.my_current_pos[1] + int(distance_cm * math.cos(rad))
-
-        self.my_current_pos = (round(new_x,2), round(new_y,2))
-        self.my_current_orientation -= rotation_deg
-        self.my_imu_orientation = self.drone.get_yaw()
-
-        if self.my_current_orientation > 180:
-            self.my_current_orientation -= 360
-        elif self.my_current_orientation < -180:
-            self.my_current_orientation += 360
-
-        self.waypoints_executed.append({"x_cm": self.my_current_pos[0], "y_cm": self.my_current_pos[1], 
-                                        "orientation_deg": self.my_current_orientation, "imu_orientation_deg": self.my_imu_orientation,
-                                        "distance_cm": distance_cm, "rotation_deg": rotation_deg})
-        logging.info(f"Updated waypoints executed: {self.waypoints_executed}")
 
     def detect_markers(self, frame, display_frame, marker_size=14.0):
         """
@@ -534,25 +432,20 @@ class DroneController:
             if lockedon_marker_info:    # ie. if lockedon_marker is still detected, even if its not the first detection, discard the valid_marker in favour of locked_on marker
                 self.valid_marker_info = lockedon_marker_info
 
-
-            # DANGER COMPONENT - TBC 26 FEB activate only when centered
-            self.shortest_danger_distance = float("inf")  
-
-            # START OF 5 MAR TESTING - reset only if no danger markers detected for 20 frames (ensures drone does NOT need to see both victim and danger in the last frame)
-
+            # Resets only if no danger markers detected for 20 frames (ensures drone does NOT need to see both victim and danger in the last frame)
             if danger_marker_info == {}:    # i.e. no danger markers detected in last frame
                 self.no_danger_count += 1
             else:
                 self.no_danger_count = 0
 
             if self.no_danger_count >= 20:
+                self.shortest_danger_distance = float("inf")  
                 self.nearest_danger_id = None
                 self.nearest_danger_data = None  
                 self.danger_offset = (0,0,0)
-
+                
             else:
                 logging.debug("5 MAR DEBUG: Danger ID and data not resetting! Great!")
-            # END OF 5 MAR TESTING
 
             # Compute distance of all detected danger markers to the single valid marker, then finds and save the ID and data of the nearest
             if self.valid_marker_info and not self.nearest_danger_id:       

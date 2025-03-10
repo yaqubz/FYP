@@ -95,7 +95,7 @@ class MarkerServer:
         ready_drones = [drone_id for drone_id, status in self.drone_status.items() if status.get("ready", False)]
         if ready_drones:
             self.takeoff_triggered = True     # resets countdown in wait_and_takeoff
-            logging.info(f"Takeoff triggered for {ready_drones}.")
+            logging.info(f"Takeoff triggered by user. Drones currently ready: {ready_drones}")      # NOTE: logic and ready_drones in wait_and_takeoff
         else:
             logging.warning("No drones are ready for takeoff.")
 
@@ -389,17 +389,18 @@ class MarkerServer:
         start_time = time.time()
         while time.time() - start_time < takeoff_timeout:
             status_copy = self.drone_status.copy()
-            ready_drones = [d for d in all_waiting_drones if status_copy.get(d, {}).get("ready", False)]
-            if set(ready_drones) == set(all_waiting_drones):
-                logging.info(f"All drones {ready_drones} ready for takeoff!")
-                self.send_takeoff_signal(ready_drones)
+            ready_drones_inwaitlist = [d for d in all_waiting_drones if status_copy.get(d, {}).get("ready", False)]     # THIS ASSUMES THE FIRST DRONE REGISTERED HAS THE CORRECT WAITLIST - other drones' waitlists are disregarded 
+            ready_drones = [drone_id for drone_id, status in self.drone_status.items() if status.get("ready", False)]
+            if set(ready_drones_inwaitlist) == set(all_waiting_drones):
+                logging.info(f"All drones {ready_drones_inwaitlist} ready for takeoff!")
+                self.send_takeoff_signal(ready_drones_inwaitlist)
                 break
             elif self.takeoff_triggered:
                 logging.info(f"User triggered takeoff. Drones {ready_drones} ready for takeoff!")
                 self.send_takeoff_signal(ready_drones)
                 break
-            time.sleep(0.5)
-            logging.debug(f"Still waiting... {round((time.time() - start_time),2)}/{takeoff_timeout}s")
+            time.sleep(1)
+            logging.debug(f"Waiting: {round((time.time() - start_time),0)}/{takeoff_timeout}s. Ready drones: {ready_drones}. Waitlist set by 1st ready drone: {all_waiting_drones}")
 
         if not self.takeoff_triggered:
             if len(ready_drones) / len(all_waiting_drones) >= threshold:
@@ -411,7 +412,7 @@ class MarkerServer:
         self.takeoff_triggered = False
         logging.debug("wait_and_takeoff thread ended.")
 
-    def send_takeoff_signal(self, ready_drones:List):
+    def send_takeoff_signal(self, ready_drones:List, send_repeat: int = 3):
         """
         Sends takeoff signal to all ready drones.
         """
@@ -422,10 +423,14 @@ class MarkerServer:
         takeoff_message = json.dumps({"type": "takeoff", "takeoff_list": ready_drones}).encode()
         with self.lock:
             for client_addr in self.clients:
-                try:
-                    self.broadcast_sock.sendto(takeoff_message, client_addr)
-                except Exception as e:
-                    logging.warning(f"Failed to send to client {client_addr}: {e}")
+                for _ in range(send_repeat):  # Send the message N times for reliability
+                    try:
+                        self.broadcast_sock.sendto(takeoff_message, client_addr)
+                        time.sleep(0.01)  # Small 10ms delay to prevent flooding
+                    except Exception as e:
+                        logging.warning(f"Failed to send to client {client_addr}: {e}")
+
+                    logging.debug(f"MarkerServer sent {takeoff_message} to {client_addr} (sent {send_repeat} times for reliability)")
     
     ### 20 FEB GUI FUNCTIONS
 
