@@ -12,7 +12,12 @@ from shared_utils.customtello import CustomTello
 #                     'state_port': 8000 + pi_id,
 #                     'video_port': 11100 + pi_id}
 
-NETWORK_CONFIG = {'host': '192.168.10.1',     # if connected directly through WiFi
+# NETWORK_CONFIG = {'host': '192.168.10.1',     # if connected directly through WiFi
+#                     'control_port': 8889,
+#                     'state_port': 8890,
+#                     'video_port': 11111}
+
+NETWORK_CONFIG = {'host': '192.168.0.121',     # if connected directly through WiFi
                     'control_port': 8889,
                     'state_port': 8890,
                     'video_port': 11111}
@@ -20,5 +25,8 @@ NETWORK_CONFIG = {'host': '192.168.10.1',     # if connected directly through Wi
 drone = CustomTello(network_config=NETWORK_CONFIG)
 
 drone.connect()
+# drone.set_video_port(11121)
+# drone.set_state_port(8021)
+print(drone.get_battery())
 drone.takeoff()
 drone.end()

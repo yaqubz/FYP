@@ -1,5 +1,5 @@
 """
-This is to fly through RPi.
+This is to fly through AP Mode (ID 21-40).
 """
 
 
@@ -10,12 +10,10 @@ IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream disp
 PI_ID:int = 11   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 11
 
-# WAYPOINTS_JSON = "waypoint_USA5_2.json"         # For testing pillars area (Gab's startpoint -> Yaqub's entrance)
-# WAYPOINTS_JSON = "waypoint_USA5_1.json"       # FOR ARCHIT DEMO (5 MAR)
-WAYPOINTS_JSON = "UWBViz/wapoints_9mar.json"
+# WAYPOINTS_JSON = "UWBViz/smallsquare.json"
+WAYPOINTS_JSON = "UWBViz/waypoints_backentrance.json"
 
-
-FLIGHT_HEIGHT:int = 110
+FLIGHT_HEIGHT:int = 120
 TAKEOFF_HOVER_DELAY:int = 0
 
 
@@ -57,7 +55,8 @@ def get_network_config(pi_id: int):
     else:
         return {
             'host': f'192.168.0.{100+pi_id}',
-            'control_port': 9000 + pi_id,
+            # 'control_port': 9000 + pi_id,
+            'control_port': 9020 + pi_id,
             'state_port': 8000 + pi_id,
             'video_port': 11100 + pi_id
         }
@@ -68,4 +67,6 @@ if LAPTOP_ONLY:     # just in case
     NO_FLY = True
     get_network_config(0)     
 
+    DRONE_1_CONFIG = {
 
+}
