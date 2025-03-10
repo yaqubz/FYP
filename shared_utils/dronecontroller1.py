@@ -26,9 +26,9 @@ class DroneController:
         # Initialize Tello
         logging.debug(f"laptop_only = {laptop_only}")
         self.drone = MockTello() if laptop_only else CustomTello(network_config)
-        
-        self.imshow = imshow
+
         self.laptop_only = laptop_only
+        self.imshow = imshow
         
         if load_midas:
             # Initialize MiDaS model
@@ -48,8 +48,15 @@ class DroneController:
         ## COMMENT OUT BELOW FOR TESTING ------------------------------------
 
         self.drone.connect()
-        logging.info(f"Start Battery Level: {self.drone.get_battery()}%")
-
+        self.drone.streamoff()
+        start_batt = self.drone.get_battery()
+        logging.info(f"Start Battery: {start_batt}%")
+        self.marker_client.send_update("status", status_message=f'Start Battery: {start_batt}%')
+        if not self.laptop_only:
+            # Set video stream properties to reduce latency
+            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
+            self.drone.set_video_fps(self.drone.FPS_15)
+            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
         
         # 19 FEB NEW Video Stream Properties
         
@@ -62,8 +69,12 @@ class DroneController:
             
         ## COMMENT OUT ABOVE FOR TESTING----------------------------------
 
+        ## Call these two in the main() to avoid unnecessary streaming before takeoff 
+        # self.start_video_stream(imshow=imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
+        # self.start_tof_thread()
 
         # Color depth map
+        self.depth_colormap = None
         self.depth_map_colors = {}
         
         # Controller state
@@ -87,8 +98,8 @@ class DroneController:
          
         # Navigation parameters
         self.drone_id = drone_id
-        self.move_speed = 20    # usually 20
-        self.yaw_speed = 50     # usually 50
+        self.move_speed = 20
+        self.yaw_speed = 50
         self.forward_tof_dist = 0 # to be updated by subthread
         self.forward_tof_lock = Lock()
 
@@ -109,24 +120,41 @@ class DroneController:
         self.danger_offset:tuple[int] = (0,0,0)
         self.no_danger_count:int = 0
 
-    # 19 FEB NEW VIDEO HANDLING
-    
+
+    def send_command_with_return_custom(self, command:str, max_retries:int = 3) -> str:
+        """
+        Works 5 Mar - move to CustomTello instead?
+        """
+        success = False
+        for attempt in range(1, max_retries + 1):
+            if not success:
+                response = self.drone.send_command_with_return(command, timeout=3)  # Attempt rotation (OG: 135)
+                if response == "ok":
+                    success = True
+                    logging.info(f"Command successful on attempt {attempt}.")
+                else:
+                    logging.warning(f"Attempt {attempt} failed. Retrying...")
+                time.sleep(1)  # Small delay before retrying
+
     def setup_stream(self):
+        """
+        3 Mar Gab - separate function to enable stream to setup anytime in the main code (i.e. after execute_waypoints, to prevent libav264 error from blocking)
+        Takes under 3 seconds to execute
+        """
+
+        if self.laptop_only:
+            self.drone.streamon()
+
+        else:
+            self.send_command_with_return_custom('streamon', 7)     # DOES NOT WORK FOR LAPTOP_ONLY - use top instead
+
         start_time = time.time()
-        self.drone.streamon()
+        logging.info(f"Initializing frame reader... imshow = {self.imshow}")
         self.frame_reader = self.drone.get_frame_read()
 
-        if not self.laptop_only:
-            # Set video stream properties to reduce latency (TBC: MOVE THIS BEFORE DRONE TAKES OFF?)
-            self.drone.set_video_resolution(self.drone.RESOLUTION_480P)     # IMPT: Default 720P - need to use correct calibration params if set to 480P 
-            self.drone.set_video_fps(self.drone.FPS_15)
-            self.drone.set_video_bitrate(self.drone.BITRATE_3MBPS)
-        self.start_video_stream(imshow=self.imshow)  # IMPT: DO NOT call cv2.imshow in code - Comment out to deactivate, otherwise will cause lag!
-        logging.info(f"Initializing frame reader... imshow = {self.imshow}")
         time_taken = time.time() - start_time
         logging.info(f"setup_stream completed in {time_taken:.2f}s")
-        time.sleep(2)
-    
+
     def handle_land_signal(self):
         """
         NEW, TESTING 1 MAR
@@ -139,11 +167,13 @@ class DroneController:
         # self.drone.end()
         self.shutdown()
         self.marker_client.land_signal = False  # Reset the flag
+    
+    # SECTION: VIDEO HANDLING
 
     def start_video_stream(self, imshow:bool = True):
-        """Start the video streaming in a separate thread"""
+        """Start the video streaming in a separate thread. External method; Call this in the main code."""
         self.stop_event.clear()
-        self.stream_thread = threading.Thread(target=self._stream_video, args=(imshow,))
+        self.stream_thread = threading.Thread(target=self._stream_video, args={imshow,})
         self.stream_thread.daemon = True
         self.stream_thread.start()
         
@@ -157,7 +187,7 @@ class DroneController:
             logging.error(f"Error in stopping video stream: {e}")
 
     def get_current_frame(self):
-        """Thread-safe method to get the latest frame. External method."""
+        """Thread-safe method to get the latest frame. External method; Call this in the main code."""
         with self.frame_lock:
             return self.current_frame.copy() if self.current_frame is not None else None
         
@@ -170,23 +200,45 @@ class DroneController:
         """Thread-safe method to set the display frame. External method."""
         with self.frame_lock:
             self.display_frame = frame.copy() if frame is not None else None
-    
-    def _stream_video(self, imshow: bool = True):
-        """Video streaming thread function.
-        This function now only updates the current frame without calling cv2.imshow.
-        Display is handled separately in the main thread.
-        """
+            
+    def _stream_video(self, imshow:bool = True):
+        """Video streaming thread function"""
+        start_time = 0
+        logging.info("_stream_video started.")
         while not self.stop_event.is_set():
             try:
+                # start_time = log_refresh_rate(start_time, '_stream_video')        # comment out to log refresh rate!
+
                 # Capture new frame
                 frame = capture_frame(self.frame_reader)
                 if frame is None:
+                    logging.error("_stream_video: Empty frame received. Trying again.")
+                    self.empty_frame_received = True
                     continue
-                        
+
+                self.empty_frame_received = False
+
                 # Store frame thread-safely
                 with self.frame_lock:
                     self.current_frame = frame.copy()
-                    
+
+                # Display the frame
+                display_frame = self.get_display_frame()
+                if display_frame is not None and imshow:
+                    cv2.imshow(f"Drone View {self.drone_id}", display_frame)
+
+                # Handle keyboard input
+                key = cv2.waitKey(1)
+                if key != -1:
+                    if key == ord('q'):
+                        logging.info("Quit command received")
+                        self.stop_event.set()
+                        break
+                    elif key == ord('l'):
+                        logging.debug("DEBUG LOGPOINT")
+                    # Handle any additional key commands
+                    self.handle_key_command(key)
+
             except Exception as e:
                 logging.error(f"Error in video stream: {e}")
                 time.sleep(0.1)
@@ -194,167 +246,11 @@ class DroneController:
         # self._cleanup()
         self.shutdown()
 
-
-            
-    # def _stream_video(self, imshow:bool = True):
-    #     """Video streaming thread function"""
-    #     while not self.stop_event.is_set():
-    #         try:
-    #             # Capture new frame
-    #             frame = capture_frame(self.frame_reader)
-    #             if frame is None:
-    #                 continue
-                    
-    #             # Store frame thread-safely
-    #             with self.frame_lock:
-    #                 self.current_frame = frame.copy()
-                
-    #             # Display the frame
-    #             display_frame = self.get_display_frame()
-    #             if display_frame is not None and imshow:
-    #                 cv2.imshow(f"Drone View {self.drone_id}", display_frame)
-
-    #             # Handle keyboard input
-    #             key = cv2.waitKey(1)
-    #             if key != -1:
-    #                 if key == ord('q'):
-    #                     logging.info("Quit command received")
-    #                     self.stop_event.set()
-    #                     break
-    #                 elif key == ord('l'):
-    #                     logging.debug("DEBUG LOGPOINT")
-    #                 # Handle any additional key commands
-    #                 self.handle_key_command(key)
-
-    #         except Exception as e:
-    #             logging.error(f"Error in video stream: {e}")
-    #             time.sleep(0.1)
-                
-    #     self._cleanup()
-    
-    #In the _stream_video() thread, simply update the current frame:
-    
-    # def _stream_video(self, imshow: bool = True):
-    #     while not self.stop_event.is_set():
-    #         try:
-    #             frame = capture_frame(self.frame_reader)
-    #             if frame is None:
-    #                 continue
-    #             with self.frame_lock:
-    #                 self.current_frame = frame.copy()
-    #         except Exception as e:
-    #             logging.error(f"Error in video stream: {e}")
-    #             time.sleep(0.1)
-
     def handle_key_command(self, key):
         """Handle keyboard commands - can be overridden by subclasses"""
         pass
 
-    ## END OF NEW VIDEO 
-    
-    def takeoff_simul(self, drones_list:list):
-        """
-        Waits for a takeoff signal before taking off.
-        """
-        self.marker_client.send_takeoff_request(drones_list)
-        while not self.marker_client.takeoff_signal:
-            time.sleep(0.1)  # Wait for takeoff command
-        logging.info(f"Tello {self.drone_id} is taking off!")
-        self.drone.takeoff()
-
-    def generate_color_depth_map(self, frame):
-        """Process frame through MiDaS to get depth map"""
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        input_batch = self.transform(frame_rgb).to(self.device)
-        
-        with torch.no_grad():
-            prediction = self.midas(input_batch)
-            
-        depth_map = prediction.squeeze().cpu().numpy()
-        depth_map = cv2.normalize(depth_map, None, 0, 1, norm_type=cv2.NORM_MINMAX)
-        return cv2.applyColorMap((depth_map * 255).astype(np.uint8), cv2.COLORMAP_JET)
-        
-    def process_depth_color_map(self, depth_colormap):
-        """
-        :param depth_colormap: the actual frame of the depth color map
-        :return: None
-        Splits the depth map into a 3x3 grid and performs two levels of analysis:
-        - Overall middle row analysis (middle_left, middle_center, middle_right).
-        - Further subdivision of the middle_center region into three columns.
-        Updates class attributes.
-        """
-        h, w = depth_colormap.shape[:2]
-
-        # Define the 3x3 grid regions
-        top_left     = depth_colormap[:h//3, :w//3]
-        top_center   = depth_colormap[:h//3, w//3:2*w//3]
-        top_right    = depth_colormap[:h//3, 2*w//3:]
-        
-        middle_left  = depth_colormap[h//3:2*h//3, :w//3]
-        middle_center= depth_colormap[h//3:2*h//3, w//3:2*w//3]
-        middle_right = depth_colormap[h//3:2*h//3, 2*w//3:]
-        
-        bottom_left  = depth_colormap[2*h//3:, :w//3]
-        bottom_center= depth_colormap[2*h//3:, w//3:2*w//3]
-        bottom_right = depth_colormap[2*h//3:, 2*w//3:]
-        
-        # Draw the outer grid lines (green)
-        cv2.line(depth_colormap, (w//3, 0), (w//3, h), (0, 255, 0), 2)
-        cv2.line(depth_colormap, (2*w//3, 0), (2*w//3, h), (0, 255, 0), 2)
-        cv2.line(depth_colormap, (0, h//3), (w, h//3), (0, 255, 0), 2)
-        cv2.line(depth_colormap, (0, 2*h//3), (w, 2*h//3), (0, 255, 0), 2)
-        
-        # Analyze colors in the middle row regions
-        red_middle_left = np.sum((middle_left[:, :, 2] > 150) & (middle_left[:, :, 0] < 50))
-        blue_middle_left = np.sum((middle_left[:, :, 0] > 150) & (middle_left[:, :, 2] < 50))
-        
-        red_middle_center = np.sum((middle_center[:, :, 2] > 150) & (middle_center[:, :, 0] < 50))
-        blue_middle_center = np.sum((middle_center[:, :, 0] > 150) & (middle_center[:, :, 2] < 50))
-        
-        red_middle_right = np.sum((middle_right[:, :, 2] > 150) & (middle_right[:, :, 0] < 50))
-        blue_middle_right = np.sum((middle_right[:, :, 0] > 150) & (middle_right[:, :, 2] < 50))
-        
-        # Further split the middle_center region into 3 columns for detailed analysis
-        mc_row_start = h//3
-        mc_row_end = 2*h//3
-        mc_col_start = w//3
-        mc_col_end = 2*w//3
-        mc_width = mc_col_end - mc_col_start  # roughly w//3
-        sub_width = mc_width // 3             # width of each subdivided region
-        
-        middle_center_left = depth_colormap[mc_row_start:mc_row_end, mc_col_start: mc_col_start + sub_width]
-        middle_center_center = depth_colormap[mc_row_start:mc_row_end, mc_col_start + sub_width: mc_col_start + 2*sub_width]
-        middle_center_right = depth_colormap[mc_row_start:mc_row_end, mc_col_start + 2*sub_width: mc_col_end]
-        
-        # Draw extra vertical lines (blue) within the middle_center region to delineate subdivisions
-        cv2.line(depth_colormap, (mc_col_start + sub_width, mc_row_start), (mc_col_start + sub_width, mc_row_end), (255, 0, 0), 2)
-        cv2.line(depth_colormap, (mc_col_start + 2*sub_width, mc_row_start), (mc_col_start + 2*sub_width, mc_row_end), (255, 0, 0), 2)
-        
-        # Analyze colors in the subdivided middle_center subregions
-        red_mc_left = np.sum((middle_center_left[:, :, 2] > 150) & (middle_center_left[:, :, 0] < 50))
-        nonblue_mc_left = np.sum(~((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50)))
-        blue_mc_left = np.sum((middle_center_left[:, :, 0] > 150) & (middle_center_left[:, :, 2] < 50))
-        
-        red_mc_center = np.sum((middle_center_center[:, :, 2] > 150) & (middle_center_center[:, :, 0] < 50))
-        nonblue_mc_center = np.sum(~((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50)))
-        blue_mc_center = np.sum((middle_center_center[:, :, 0] > 150) & (middle_center_center[:, :, 2] < 50))
-        
-        red_mc_right = np.sum((middle_center_right[:, :, 2] > 150) & (middle_center_right[:, :, 0] < 50))
-        nonblue_mc_right = np.sum(~((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50)))
-        blue_mc_right = np.sum((middle_center_right[:, :, 0] > 150) & (middle_center_right[:, :, 2] < 50))
-        
-        # Update class attributes with both levels of analysis
-        self.depth_map_colors["middle_row"] = {
-            "middle_left": {"red": red_middle_left, "blue": blue_middle_left},
-            "middle_center": {"red": red_middle_center, "blue": blue_middle_center},
-            "middle_right": {"red": red_middle_right, "blue": blue_middle_right}
-        }
-        
-        self.depth_map_colors["middle_center_split"] = {
-            "left": {"red": red_mc_left, "blue": blue_mc_left, "nonblue": nonblue_mc_left},
-            "center": {"red": red_mc_center, "blue": blue_mc_center, "nonblue": nonblue_mc_center},
-            "right": {"red": red_mc_right, "blue": blue_mc_right, "nonblue": nonblue_mc_right}
-        }
+    # SECTION: TOF and DISTANCE
 
     def get_distance(self):
         with self.distance_lock:
@@ -383,7 +279,7 @@ class DroneController:
         # self._cleanup()
 
     def start_tof_thread(self):
-        """Start the forward ToF reading in a separate thread"""
+        """Start the forward ToF reading in a separate thread. External method; Call this in the main code."""
         self.stop_event.clear()
         self.tof_thread = threading.Thread(target=self._tof_thread)
         self.tof_thread.daemon = True
@@ -397,6 +293,8 @@ class DroneController:
                 self.tof_thread.join(timeout=2)
         except Exception as e:
             logging.error(f"Error in stopping ToF thread: {e}")
+
+    # SECTION: General Functions
 
     def shutdown(self):
         """
@@ -415,37 +313,102 @@ class DroneController:
         else:
             logging.warning("Trying to shutdown, but already shut down previously.")
 
-    def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
+    def takeoff_simul(self, drones_list:list):
         """
-        TODO 19 FEB - doesnt work; can also take in an argument to set the actual current pos? inspo PPFLY2
-
-        :args:
-        rotation_deg: input given in as GUI json (i.e. +ve ccw) 
-
-        (Dead reckoning) Update the drone's position and store it in the waypoints_executed list.
-        Also stores the distance travelled / degrees rotated in the previous command.
-        Assumes drone rotates and only travels forward in straight lines.
-            Drone's rotation is +ve in the clockwise direction (i.e. turning right)
-            GUI's rotation (and by extension, waypoints.json) is +ve in the anticlockwise direction (i.e. turning left)
+        Waits for a takeoff signal before taking off.
+        Also works for user-triggered simultaneous take-off - use drones_list = [99]
+        """
+        self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")
         
+        while not self.marker_client.takeoff_signal and self.is_running:
+            # self.marker_client.send_takeoff_request(drones_list, status_message=f"Battery: {self.drone.get_battery()}%")      # probably extra af
+            logging.debug(f"Tello {self.drone_id} waiting to take off. takeoff_signal: {self.marker_client.takeoff_signal}, is_running: {self.is_running}")
+            time.sleep(0.5)  # Wait for takeoff command
+        logging.info(f"Tello {self.drone_id} is taking off!")
+
+    def generate_color_depth_map(self, frame):
+        """Process frame through MiDaS to get depth map. Each frame takes about 0.15-0.30 seconds (Gab tested 1 Mar)"""
+        # start_time = time.time()
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        input_batch = self.transform(frame_rgb).to(self.device)
+        
+        with torch.no_grad():
+            prediction = self.midas(input_batch)
+            
+        depth_map = prediction.squeeze().cpu().numpy()
+        depth_map = cv2.normalize(depth_map, None, 0, 1, norm_type=cv2.NORM_MINMAX)
+        # duration = time.time() - start_time
+        # logging.debug(f"generate_color_depth_map took: {duration:.2f}s")
+        return cv2.applyColorMap((depth_map * 255).astype(np.uint8), cv2.COLORMAP_JET)
+        
+    def process_depth_color_map(self, depth_colormap):
         """
-        rad = math.radians(rotation_deg)
-        new_x = self.my_current_pos[0] + int(distance_cm * math.sin(rad))
-        new_y = self.my_current_pos[1] + int(distance_cm * math.cos(rad))
+        :param: depth_colormap: the actual frame of the depth color map
+        :return: None
+        Split depth map into regions for navigation. Updates class attributes.
+        """
+        h, w = depth_colormap.shape[:2]
+        left_region = depth_colormap[:, :w//3]
+        center_region = depth_colormap[:, w//3:2*w//3]
+        right_region = depth_colormap[:, 2*w//3:]
+        
+        # Draw region divisions on depth map
+        cv2.line(depth_colormap, (w//3, 0), (w//3, h), (0, 255, 0), 2)
+        cv2.line(depth_colormap, (2*w//3, 0), (2*w//3, h), (0, 255, 0), 2)
+        
+        # Analyze colors in regions
+        red_left = np.sum((left_region[:, :, 2] > 150) & (left_region[:, :, 0] < 50))
+        red_center = np.sum((center_region[:, :, 2] > 150) & (center_region[:, :, 0] < 50))
+        red_right = np.sum((right_region[:, :, 2] > 150) & (right_region[:, :, 0] < 50))
+        
+        blue_left = np.sum((left_region[:, :, 0] > 150) & (left_region[:, :, 2] < 50))
+        blue_center = np.sum((center_region[:, :, 0] > 150) & (center_region[:, :, 2] < 50))
+        blue_right = np.sum((right_region[:, :, 0] > 150) & (right_region[:, :, 2] < 50))
 
-        self.my_current_pos = (round(new_x,2), round(new_y,2))
-        self.my_current_orientation -= rotation_deg
-        self.my_imu_orientation = self.drone.get_yaw()
+        # Update class attribute
+        self.depth_map_colors["red"] = {
+            "left": red_left,
+            "center": red_center,
+            "right": red_right
+        }
 
-        if self.my_current_orientation > 180:
-            self.my_current_orientation -= 360
-        elif self.my_current_orientation < -180:
-            self.my_current_orientation += 360
+        self.depth_map_colors["blue"] = {
+            "left": blue_left,
+            "center": blue_center,
+            "right": blue_right
+        }
 
-        self.waypoints_executed.append({"x_cm": self.my_current_pos[0], "y_cm": self.my_current_pos[1], 
-                                        "orientation_deg": self.my_current_orientation, "imu_orientation_deg": self.my_imu_orientation,
-                                        "distance_cm": distance_cm, "rotation_deg": rotation_deg})
-        logging.info(f"Updated waypoints executed: {self.waypoints_executed}")
+    # def update_current_pos(self, rotation_deg:float=0, distance_cm:float=0):
+    #     """
+    #     TODO 19 FEB - doesnt work; can also take in an argument to set the actual current pos? inspo PPFLY2
+
+    #     :args:
+    #     rotation_deg: input given in as GUI json (i.e. +ve ccw) 
+
+    #     (Dead reckoning) Update the drone's position and store it in the waypoints_executed list.
+    #     Also stores the distance travelled / degrees rotated in the previous command.
+    #     Assumes drone rotates and only travels forward in straight lines.
+    #         Drone's rotation is +ve in the clockwise direction (i.e. turning right)
+    #         GUI's rotation (and by extension, waypoints.json) is +ve in the anticlockwise direction (i.e. turning left)
+        
+    #     """
+    #     rad = math.radians(rotation_deg)
+    #     new_x = self.my_current_pos[0] + int(distance_cm * math.sin(rad))
+    #     new_y = self.my_current_pos[1] + int(distance_cm * math.cos(rad))
+
+    #     self.my_current_pos = (round(new_x,2), round(new_y,2))
+    #     self.my_current_orientation -= rotation_deg
+    #     self.my_imu_orientation = self.drone.get_yaw()
+
+    #     if self.my_current_orientation > 180:
+    #         self.my_current_orientation -= 360
+    #     elif self.my_current_orientation < -180:
+    #         self.my_current_orientation += 360
+
+    #     self.waypoints_executed.append({"x_cm": self.my_current_pos[0], "y_cm": self.my_current_pos[1], 
+    #                                     "orientation_deg": self.my_current_orientation, "imu_orientation_deg": self.my_imu_orientation,
+    #                                     "distance_cm": distance_cm, "rotation_deg": rotation_deg})
+    #     logging.info(f"Updated waypoints executed: {self.waypoints_executed}")
 
     def detect_markers(self, frame, display_frame, marker_size=14.0):
         """
