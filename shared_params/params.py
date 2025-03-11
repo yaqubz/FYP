@@ -19,10 +19,6 @@ FLIGHT_HEIGHT_SEARCH:int = 130
 TAKEOFF_HOVER_DELAY:int = 0
 PRE_TAKEOFF_DELAY:int = 0
 
-# To implement 20 Feb
-LOAD_MIDAS:bool = False
-SIMUL_TAKEOFF_GROUP:list = []
-
 
 
 

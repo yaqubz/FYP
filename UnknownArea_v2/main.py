@@ -471,52 +471,8 @@ class HoverOnErrorHandler(logging.Handler):
             if not hover_mode:
                 print("HAHAHAver mode activated")
             hover_mode = True
-            # # Optionally send an immediate hover command:
+            # # Optionally send an immediate hover command:     # TBC 12 MAR  - TO VERIFY
             # self.drone.send_rc_control(0, 0, 0, 0)          
-                
-# def main():     gabs version but does not let me display stream
-#     global DIST_COEFF, logger #params 
-    
-#     # Setup logging
-#     logger = setup_logging(params, "UnknownArea.main")      # local logger
-#     logger.info(f"Starting unknown area main with drone_id: {params.PI_ID}")
-#     controller = DroneController(params.NETWORK_CONFIG, drone_id=params.PI_ID, laptop_only=params.LAPTOP_ONLY, load_midas=True)
-#     # Add the custom error handler to catch video errors
-#     error_keywords = ["libav.h264", "no frame!", "non-existing PPS", "decode_slice_header error"]
-#     hover_handler = HoverOnErrorHandler(controller.drone, error_keywords)
-#     logger.addHandler(hover_handler)
-#     try:
-#         if not params.NO_FLY:
-#             with controller.forward_tof_lock:    
-#                 controller.marker_client.send_update('status', status_message='Waiting for takeoff')
-#                 controller.drone.takeoff()
-#                 #controller.takeoff_simul([11,17])
-#                 logger.info("Taking off for real...")
-#                 controller.marker_client.send_update('status', status_message=f'Flying at {controller.drone.get_battery()}%')
-#                 controller.drone.send_rc_control(0, 0, 0, 0)
-#                 #execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY) #do the run with the waypoints first
-#         else:
-#             logger.info("Simulating takeoff. Drone will NOT fly.")
-#             # execute_waypoints("waypoints_samplesmall.json", controller.drone, params.NO_FLY)
-#         time.sleep(2)
-#         controller.setup_stream()
-#         controller.start_tof_thread()
-#         navigation_thread(controller)
-
-#     except Exception as e:
-#         logger.error(f"Error in main: {e}. Landing.")
-
-#     finally:
-#         controller.marker_client.send_update('status', status_message='Landing')
-#         end_batt = controller.drone.get_battery()
-#         logger.info(f"Actually landing for real. End Battery Level: {end_batt}%")
-#         with controller.forward_tof_lock:
-#             controller.drone.end()
-#         controller.marker_client.send_update('status', status_message=f'Landed. {end_batt}%')
-#         controller.is_running = False
-#         controller.stop_event.set()
-#         cv2.destroyAllWindows()
-#         cv2.waitKey(1)
 
 def display_loop(controller):
     window_name = f"Drone View {controller.drone_id}"
@@ -554,35 +510,35 @@ def main():
     
     try:
         with controller.forward_tof_lock:    
+            controller.marker_client.client_takeoff_simul([99], status_message=f'Waiting for takeoff.')    # just holds the drone until released. still needs takeoff() in the next line 
             init_yaw = controller.drone.get_yaw()
-            controller.marker_client.client_takeoff_simul([3,17], status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')    # just holds the drone until released. still needs takeoff() in the next line 
 
-            try:        # This try-except block can be removed once all paramsX.py have PRE_TAKEOFF_DELAY
-                if params.PRE_TAKEOFF_DELAY:
-                    logging.info(f"Take off triggered. Starting countdown: {params.PRE_TAKEOFF_DELAY}s")
-                    time.sleep(params.PRE_TAKEOFF_DELAY)
-            except Exception as e:
-                logging.error(f"Error: {e}. Unable to perform PRE_TAKEOFF_DELAY. Continuing on...")
+            # After takeoff triggered, chill on the ground for a specified delay (for 2nd takeoff)
+            if params.PRE_TAKEOFF_DELAY > 0:
+                msg = f"Takeoff triggered. Starting countdown: {params.PRE_TAKEOFF_DELAY}s"
+                logging.info(msg)
+                controller.marker_client.send_update('status', status_message=msg)
+                time.sleep(params.PRE_TAKEOFF_DELAY)
             
             if not params.NO_FLY:
                 controller.drone.takeoff()
                 logging.info("Taking off for real...")
             else:
                 logging.info("Simulating taking off for real...")
+
             controller.marker_client.send_update('status', status_message=f'Taking off. {controller.drone.get_battery()}%')
             controller.drone.send_rc_control(0, 0, 0, 0)
             time.sleep(1)
             post_yaw = controller.drone.get_yaw()
             yaw_back = post_yaw - init_yaw
             logging.debug(f"Init yaw: {init_yaw}, Post yaw: {post_yaw}, Normalize: {normalize_angle(yaw_back)}")
-            
-            try:        # This try-except block can be removed once all paramsX.py have TAKEOFF_HOVER_DELAY
-                if params.PRE_TAKEOFF_DELAY:
-                    logging.info(f"Starting {params.TAKEOFF_HOVER_DELAY}s hover")
-                    time.sleep(params.TAKEOFF_HOVER_DELAY)        # Hover in position after takeoff
-            except Exception as e:
-                logging.error(f"Error: {e}. Unable to perform TAKEOFF_HOVER_DELAY. Continuing on...")
 
+            # After taking off for real, hover for a specified delay
+            if params.TAKEOFF_HOVER_DELAY > 0:
+                logging.info(f"Starting {params.TAKEOFF_HOVER_DELAY}s hover")
+                time.sleep(params.TAKEOFF_HOVER_DELAY)        # Hover in position after takeoff
+
+            # Go to specified FLIGHT_HEIGHT_WAYPOINTS and execute waypoints at that flight level
             if not params.NO_FLY:
                 try:
                     logging.info(f"Going to initial flight height {params.FLIGHT_HEIGHT_WAYPOINTS}")  

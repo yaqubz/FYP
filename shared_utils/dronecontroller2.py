@@ -16,7 +16,7 @@ from .shared_utils import *
 
 """
 17 Feb LATEST Testing - V2 for Simultaneous takeoff and integrating ALL controllers
-11 Mar Almost Stable - Moved takeoff_simul to MarkerClient; Midas into centre subsections
+11 Mar Stable - Moved takeoff_simul to MarkerClient; Midas into centre subsections
 """
 
 class DroneController:
@@ -128,7 +128,6 @@ class DroneController:
     
     def handle_land_signal(self):
         """
-        NEW, TESTING 1 MAR
         Callback function to handle the land signal. 
         Does not work during execute_waypoints!
         """

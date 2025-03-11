@@ -535,6 +535,7 @@ class MarkerClient:
         
         while not self.takeoff_signal:      # This is a holding pattern, which releases upon takeoff_signal being set by the server.
             logging.debug(f"Tello {self.drone_id} waiting to take off. takeoff_signal: {self.takeoff_signal}")
+            self.send_takeoff_request(drones_list, status_message=status_message)   # TBC 12 MAR - continue sending takeoff requests, just in case. (will it be too spammy?)
             time.sleep(0.5)  # Wait for takeoff command
 
         logging.info(f"Tello {self.drone_id} is taking off!")

@@ -1,5 +1,5 @@
 """
-This is to fly through AP Mode (ID 21-40).
+This is to fly through AP Mode (NOTE: Previous control_port + 20).
 """
 
 
@@ -10,10 +10,10 @@ IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream disp
 PI_ID:int = 11   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 11
 
-# WAYPOINTS_JSON = "UWBViz/smallsquare.json"
+WAYPOINTS_JSON = "forwardback500.json"
 # WAYPOINTS_JSON = "UWBViz/waypoints_backentrance.json"
 
-FLIGHT_HEIGHT_WAYPOINTS:int = 50
+FLIGHT_HEIGHT_WAYPOINTS:int = 120
 FLIGHT_HEIGHT_SEARCH:int = 120
 
 TAKEOFF_HOVER_DELAY:int = 0
