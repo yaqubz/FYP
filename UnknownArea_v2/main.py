@@ -218,10 +218,10 @@ def navigation_thread(controller:DroneController):
     # time.sleep(2)  # Give time for camera to initialize
     
     # Initial movement
-    logger.info("Moving to initial altitude...")
+    logger.info("Moving to searching altitude...")
     if not params.NO_FLY:
         with controller.forward_tof_lock:
-            controller.drone.go_to_height_PID(120) # COMMENTED OUT 27 FEB - waste time?
+            controller.drone.go_to_height(params.FLIGHT_HEIGHT_SEARCH) # COMMENTED OUT 27 FEB - waste time?
             # controller.drone.move_up(20)
         time.sleep(1)
     
@@ -400,7 +400,7 @@ def navigation_thread(controller:DroneController):
                 
             elif controller.exit_detected: # This condition is placed after marker_detected but before depth mapping 
                 exit_text:str = f"Exit detected {controller.exit_distance_3D:.0f}cm away."
-                logger.info("No valid markers detected." + exit_text)
+                logger.info("No valid markers detected. " + exit_text)
                 cv2.putText(display_frame, exit_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
                 if not params.NO_FLY and controller.exit_distance_3D < 300:
                     logger.info(f"Avoiding exit. Turning 90 degrees.")
@@ -409,6 +409,7 @@ def navigation_thread(controller:DroneController):
 
                 elif not params.NO_FLY:
                     logger.info(f"Exit more than 3m away, no action taken.")
+                    display_frame = nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
 
             else: # Navigation logic using depth map if neither victim nor exit detected. Simulates well without drone
                 # NOTE 4 Feb: Check ToF after depth map should enable it to enter tighter spaces. To be more conservative, can consider checking ToF before depth map.)
@@ -556,13 +557,12 @@ def main():
     
     try:
         with controller.forward_tof_lock:    
-            controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
             init_yaw = controller.drone.get_yaw()
-            controller.marker_client.client_takeoff_simul([99])     # just holds the drone until released. still needs takeoff() in the next line 
+            controller.marker_client.client_takeoff_simul([3,17], status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')    # just holds the drone until released. still needs takeoff() in the next line 
 
             try:        # This try-except block can be removed once all paramsX.py have PRE_TAKEOFF_DELAY
                 if params.PRE_TAKEOFF_DELAY:
-                    logging.info(f"Take off triggered. Starting countdown: f{params.PRE_TAKEOFF_DELAY}s")
+                    logging.info(f"Take off triggered. Starting countdown: {params.PRE_TAKEOFF_DELAY}s")
                     time.sleep(params.PRE_TAKEOFF_DELAY)
             except Exception as e:
                 logging.error(f"Error: {e}. Unable to perform PRE_TAKEOFF_DELAY. Continuing on...")
@@ -581,13 +581,15 @@ def main():
             
             try:        # This try-except block can be removed once all paramsX.py have TAKEOFF_HOVER_DELAY
                 if params.PRE_TAKEOFF_DELAY:
-                    logging.info(f"Starting f{params.TAKEOFF_HOVER_DELAY}s hover")
+                    logging.info(f"Starting {params.TAKEOFF_HOVER_DELAY}s hover")
                     time.sleep(params.TAKEOFF_HOVER_DELAY)        # Hover in position after takeoff
             except Exception as e:
                 logging.error(f"Error: {e}. Unable to perform TAKEOFF_HOVER_DELAY. Continuing on...")
 
             if not params.NO_FLY:
-                try:        
+                try:
+                    logging.info(f"Going to initial flight height {params.FLIGHT_HEIGHT_WAYPOINTS}")  
+                    controller.drone.go_to_height(params.FLIGHT_HEIGHT_WAYPOINTS)
                     logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
                     execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
                 except Exception as e:

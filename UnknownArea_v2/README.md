@@ -33,3 +33,9 @@ pip install opencv-contrib-python
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+
+## New Feature 11 Mar - AP Mode
+
+Turn on drones one at a time and use `.\launch\check_apdrones.bat` to check for ping status of drones.
+If needed, check router config page (192.168.0.1) to verify drones' assigned IP.

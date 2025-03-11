@@ -99,7 +99,7 @@ class MarkerServer:
         else:
             logging.warning("No drones are ready for takeoff.")
 
-    def trigger_land(self):
+    def trigger_land(self, send_repeat:int = 3):
         """
         Sends a land signal to all connected drones.
         """
@@ -107,11 +107,12 @@ class MarkerServer:
         land_message = json.dumps({"type": "land"}).encode()
         with self.lock:
             for client_addr in self.clients:
-                try:
-                    self.broadcast_sock.sendto(land_message, client_addr)
-                except Exception as e:
-                    logging.warning(f"Failed to send land signal to client {client_addr}: {e}")
-        logging.info("Land signal sent to all drones.")
+                for _ in range(send_repeat):
+                    try:
+                        self.broadcast_sock.sendto(land_message, client_addr)
+                    except Exception as e:
+                        logging.warning(f"Failed to send land signal to client {client_addr}: {e}")
+        logging.info(f"Land signal sent to all drones {send_repeat} times for reliability. ")
 
     def check_timeouts(self):
         """Check for markers and waypoints that haven't been updated and clear their status.

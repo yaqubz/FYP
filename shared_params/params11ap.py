@@ -11,9 +11,11 @@ PI_ID:int = 11   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 11
 
 # WAYPOINTS_JSON = "UWBViz/smallsquare.json"
-WAYPOINTS_JSON = "UWBViz/waypoints_backentrance.json"
+# WAYPOINTS_JSON = "UWBViz/waypoints_backentrance.json"
 
-FLIGHT_HEIGHT:int = 120
+FLIGHT_HEIGHT_WAYPOINTS:int = 50
+FLIGHT_HEIGHT_SEARCH:int = 120
+
 TAKEOFF_HOVER_DELAY:int = 0
 PRE_TAKEOFF_DELAY:int = 0
 
