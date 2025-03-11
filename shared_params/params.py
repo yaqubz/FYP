@@ -15,6 +15,7 @@ WAYPOINTS_JSON = "UWBViz/waypoints_uwb.json"
 
 FLIGHT_HEIGHT:int = 120
 TAKEOFF_HOVER_DELAY:int = 0
+PRE_TAKEOFF_DELAY:int = 0
 
 # To implement 20 Feb
 LOAD_MIDAS:bool = False

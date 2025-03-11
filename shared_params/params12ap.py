@@ -15,6 +15,7 @@ WAYPOINTS_JSON = "UWBViz/waypoints_backentrance.json"
 
 FLIGHT_HEIGHT:int = 120
 TAKEOFF_HOVER_DELAY:int = 0
+PRE_TAKEOFF_DELAY:int = 0
 
 
 ### LESS COMMONLY TOUCHED PARAMS ###

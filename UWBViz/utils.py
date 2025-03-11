@@ -508,3 +508,44 @@ def get_yaw_angle(pos0: Tuple[float, float], pos1: Tuple[float, float], posref: 
         angle_deg = -angle_deg
 
     return angle_deg
+
+class Button:
+    def __init__(self, x, y, width, height, text, font, color, hover_color, text_color):
+        self.rect = pygame.Rect(x, y, width, height)
+        self.text = text
+        self.font = font
+        self.color = color
+        self.hover_color = hover_color
+        self.text_color = text_color
+        self.hovered = False
+
+    def draw(self, screen):
+        # Change color if hovered
+        if self.hovered:
+            pygame.draw.rect(screen, self.hover_color, self.rect)
+        else:
+            pygame.draw.rect(screen, self.color, self.rect)
+
+        # Render the text
+        text_surface = self.font.render(self.text, True, self.text_color)
+        text_rect = text_surface.get_rect(center=self.rect.center)
+        screen.blit(text_surface, text_rect)
+
+    def check_hover(self, mouse_pos):
+        self.hovered = self.rect.collidepoint(mouse_pos)
+
+    def is_clicked(self, mouse_pos):
+        return self.hovered and self.rect.collidepoint(mouse_pos)
+    
+key_to_number = {
+    pygame.K_1: 1,
+    pygame.K_2: 2,
+    pygame.K_3: 3,
+    pygame.K_4: 4,
+    pygame.K_5: 5,
+    pygame.K_6: 6,
+    pygame.K_7: 7,
+    pygame.K_8: 8,
+    pygame.K_9: 9,
+    pygame.K_0: 0
+}

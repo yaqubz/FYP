@@ -39,8 +39,13 @@ class UWBVisualization:
         self.coord_system = CoordinateSystem()
         self.visualization = Visualization(self.screen, self.coord_system)
         self.background = Background(BGPIC)
+
+        font = pygame.font.Font(None, 36)
+
+        self.button1 = Button(100, 100, 200, 50, "Button 1", font, GREEN, BLUE, BLACK)
+        self.button2 = Button(100, 200, 200, 50, "Button 2", font, GREEN, BLUE, BLACK)
         
-        self.latest_positions_data = None
+        self.latest_positions_data = None       # Stores a local copy of ALL positions df
         self.data_lock = threading.Lock()
         self.controls_enabled = True
         self.panning = False
@@ -48,6 +53,8 @@ class UWBVisualization:
         self.waypoints = []
         self.loaded_marked_pos = None
         self.loaded_marked_pos_filename: str = None  
+
+        self.tag_registered:int = 0
 
         self.last_cmdline: str = None        # Disabled 15 Feb - too complex to implement printing cmdline on pygame
         
@@ -251,36 +258,49 @@ class UWBVisualization:
                 event.type == pygame.KEYDOWN and 
                 event.key == pygame.K_ESCAPE
             ):
-                
                 if self.recording_manager.recording:
                     filename = self.recording_manager.stop_recording(self.loaded_marked_pos)
                     self.load_marked_positions(filename)
                 return False
-                
+                    
             elif event.type == pygame.VIDEORESIZE:
                 # Handle window resize
                 self.screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
                 self.visualization.screen = self.screen  # Update visualization's screen reference
-                
+                    
             elif event.type == pygame.MOUSEWHEEL and self.controls_enabled:
                 self.handle_zoom(event.y)
-                
+                    
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self.controls_enabled:
                     self.panning = True
                     self.last_mouse_pos = pygame.mouse.get_pos()
-                    
+
+                # Check for button clicks
+                mouse_pos = pygame.mouse.get_pos()
+                if self.button1.is_clicked(mouse_pos):
+                    print("Button 1 clicked!")
+                    # Trigger your event here
+                if self.button2.is_clicked(mouse_pos):
+                    print("Button 2 clicked!")
+                    # Trigger your event here
+                        
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 self.panning = False
-                
+                    
             elif event.type == pygame.MOUSEMOTION and self.panning and self.controls_enabled:
                 current_pos = pygame.mouse.get_pos()
                 self.coord_system.offset_x += current_pos[0] - self.last_mouse_pos[0]
                 self.coord_system.offset_y += current_pos[1] - self.last_mouse_pos[1]
                 self.last_mouse_pos = current_pos
-                
+                    
             elif event.type == pygame.KEYDOWN:
                 self.handle_keypress(event.key)
+
+        # Update hover state for buttons
+        mouse_pos = pygame.mouse.get_pos()
+        self.button1.check_hover(mouse_pos)
+        self.button2.check_hover(mouse_pos)
 
         return True
 
@@ -300,7 +320,12 @@ class UWBVisualization:
             uwb_x, uwb_y = self.coord_system.uwb_coordinates(mouse_x, mouse_y)
             current_pos = {'x': uwb_x, 'y': uwb_y, 'z': 0}
         elif self.latest_positions_data is not None and not self.latest_positions_data.empty:
-            last_pos = self.latest_positions_data.iloc[-1]
+            # print(f"DEBUG 11 MAR: latest_positions_data = {self.latest_positions_data}")
+            if self.tag_registered != 0:
+                last_pos = self.latest_positions_data.loc[self.latest_positions_data['id'] == self.tag_registered]
+            else:
+                last_pos = self.latest_positions_data.iloc[-1]      # caa 11 Mar : currently takes the LARGEST tag number (to work)
+            
             current_pos = {'x': last_pos['x'], 'y': last_pos['y'], 'z': last_pos.get('z', 0)}
 
         if key == pygame.K_SPACE:
@@ -335,8 +360,7 @@ class UWBVisualization:
             self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'victim')
         elif key == pygame.K_d and current_pos:
             self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'danger')
-        elif key == pygame.K_1 and current_pos:
-            # self.recording_manager.add_waypoint(current_pos['x'], current_pos['y'], current_pos['z'])
+        elif key == pygame.K_q and current_pos and self.recording_manager.recording:    # Add waypoint
             self.recording_manager.add_point(current_pos['x'], current_pos['y'], current_pos['z'], 'waypoint')
         elif key == pygame.K_z:
             self.recording_manager.remove_last_obj()
@@ -346,6 +370,10 @@ class UWBVisualization:
                 print("Marked points loaded successfully")
             else:
                 print("Marked points not loaded")
+        elif key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6, pygame.K_7, pygame.K_8, pygame.K_9, pygame.K_0) and not self.recording_manager.recording:
+            number_pressed = key_to_number.get(key)
+            self.tag_registered = int(number_pressed)
+            print(f"Registering tag number: {number_pressed}")
 
     def pause_data_thread(self):
         print("[INFO] Pausing data collection thread. Please type input in the terminal.")
@@ -413,6 +441,10 @@ class UWBVisualization:
         # Blit instructions text on top of the white boxes
         self.screen.blit(text, (30, 40))
         self.screen.blit(text2, (30, 70))
+
+        # Draw buttons
+        self.button1.draw(self.screen)
+        self.button2.draw(self.screen)
 
         pygame.display.update()
 

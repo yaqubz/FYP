@@ -559,6 +559,14 @@ def main():
             controller.marker_client.send_update('status', status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')
             init_yaw = controller.drone.get_yaw()
             controller.marker_client.client_takeoff_simul([99])     # just holds the drone until released. still needs takeoff() in the next line 
+
+            try:        # This try-except block can be removed once all paramsX.py have PRE_TAKEOFF_DELAY
+                if params.PRE_TAKEOFF_DELAY:
+                    logging.info(f"Take off triggered. Starting countdown: f{params.PRE_TAKEOFF_DELAY}s")
+                    time.sleep(params.PRE_TAKEOFF_DELAY)
+            except Exception as e:
+                logging.error(f"Error: {e}. Unable to perform PRE_TAKEOFF_DELAY. Continuing on...")
+            
             if not params.NO_FLY:
                 controller.drone.takeoff()
                 logging.info("Taking off for real...")
@@ -571,10 +579,15 @@ def main():
             yaw_back = post_yaw - init_yaw
             logging.debug(f"Init yaw: {init_yaw}, Post yaw: {post_yaw}, Normalize: {normalize_angle(yaw_back)}")
             
-            # time.sleep(params.TAKEOFF_HOVER_DELAY)
+            try:        # This try-except block can be removed once all paramsX.py have TAKEOFF_HOVER_DELAY
+                if params.PRE_TAKEOFF_DELAY:
+                    logging.info(f"Starting f{params.TAKEOFF_HOVER_DELAY}s hover")
+                    time.sleep(params.TAKEOFF_HOVER_DELAY)        # Hover in position after takeoff
+            except Exception as e:
+                logging.error(f"Error: {e}. Unable to perform TAKEOFF_HOVER_DELAY. Continuing on...")
 
             if not params.NO_FLY:
-                try:
+                try:        
                     logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
                     execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
                 except Exception as e:
