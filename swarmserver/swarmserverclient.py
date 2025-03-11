@@ -445,11 +445,11 @@ class MarkerServer:
         self.marker_tree.column("Landed", width=int(total_width * dec1))    
         self.marker_tree.column("Drone ID", width=int(total_width * dec1))  
 
-        dec2 = float(1/4)
-        self.drone_tree.column("Drone ID", width=int(total_width * dec2))     
+        dec2 = float(1/5)
+        self.drone_tree.column("Drone ID", width=int(total_width * dec2/2))     
         self.drone_tree.column("Ready", width=int(total_width * dec2))       
         self.drone_tree.column("Waiting List", width=int(total_width * dec2))
-        self.drone_tree.column("Status", width=int(total_width * dec2))
+        self.drone_tree.column("Status", width=int(total_width * dec2 * 2.5))
 
     def update_gui(self):
         """Update the GUI with the latest marker, drone, and waypoints statuses."""

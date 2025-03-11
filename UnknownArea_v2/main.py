@@ -202,7 +202,7 @@ def draw_pose_axes_danger(controller:DroneController, display_frame):
 # Global variables (or add them to your controller if preferred)
 hover_mode = False
 last_error_time = 0
-error_timeout = 0.3  # seconds without an error to exit hover mode
+error_timeout = 0.2  # seconds without an error to exit hover mode
 
 def navigation_thread(controller:DroneController):
     """Main navigation thread combining depth mapping and marker detection"""
@@ -221,7 +221,7 @@ def navigation_thread(controller:DroneController):
     logger.info("Moving to searching altitude...")
     if not params.NO_FLY:
         with controller.forward_tof_lock:
-            controller.drone.go_to_height(params.FLIGHT_HEIGHT_SEARCH) # COMMENTED OUT 27 FEB - waste time?
+            controller.drone.go_to_height(params.FLIGHT_HEIGHT_SEARCH)
             # controller.drone.move_up(20)
         time.sleep(1)
     
@@ -263,8 +263,6 @@ def navigation_thread(controller:DroneController):
             controller.process_depth_color_map(depth_colormap)
             
             # Get ToF distance
-            # controller.drone.send_rc_control(0, 0, 0, 0)    # stop before getting Tof reading since it takes 0.5-7 seconds to read ToF
-            # tof_dist = controller.drone.get_ext_tof()      
             tof_dist = controller.forward_tof_dist    # if using tof_thread (commented out 3 Feb)
             logger.debug(f"ToF Dist: {tof_dist}")
             cv2.putText(display_frame, f"ToF: {tof_dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -349,7 +347,6 @@ def navigation_thread(controller:DroneController):
                             if current_distance_2D >= 500:
                                 step_dist:int = 100
                                 logger.info(f"{current_distance_2D:.2f}cm distance too large. Stepping forward {step_dist}cm to approach marker...")
-                                # controller.drone.send_rc_control(0, 0, 0, 0)
                                 controller.drone.move_forward(step_dist)
                                 time.sleep(0.5)  # Wait for movement to complete
                                 centering_complete = False
@@ -472,10 +469,10 @@ class HoverOnErrorHandler(logging.Handler):
             current_time = time.time()
             last_error_time = current_time  # update on error
             if not hover_mode:
-                print("HAHAHAHAHAHA IT WORKED")
+                print("HAHAHAver mode activated")
             hover_mode = True
-            # Optionally send an immediate hover command:
-            self.drone.send_rc_control(0, 0, 0, 0)          
+            # # Optionally send an immediate hover command:
+            # self.drone.send_rc_control(0, 0, 0, 0)          
                 
 # def main():     gabs version but does not let me display stream
 #     global DIST_COEFF, logger #params 
