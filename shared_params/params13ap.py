@@ -10,14 +10,14 @@ IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream disp
 PI_ID:int = 13   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 13
 
-WAYPOINTS_JSON = "forwardback500.json"
+WAYPOINTS_JSON = "waypoint_USAGAB2.json"
 # WAYPOINTS_JSON = "UWBViz/waypoints_3m.json"
 
 FLIGHT_HEIGHT_WAYPOINTS:int = 120
 FLIGHT_HEIGHT_SEARCH:int = 120
 
 TAKEOFF_HOVER_DELAY:int = 0
-PRE_TAKEOFF_DELAY:int = 30
+PRE_TAKEOFF_DELAY:int = 120
 
 
 ### LESS COMMONLY TOUCHED PARAMS ###

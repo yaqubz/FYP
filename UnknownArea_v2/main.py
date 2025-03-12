@@ -510,7 +510,7 @@ def main():
     
     try:
         with controller.forward_tof_lock:    
-            controller.marker_client.client_takeoff_simul([99], status_message=f'Waiting for takeoff.')    # just holds the drone until released. still needs takeoff() in the next line 
+            controller.marker_client.client_takeoff_simul([99], status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')    # just holds the drone until released. still needs takeoff() in the next line 
             init_yaw = controller.drone.get_yaw()
 
             # After takeoff triggered, chill on the ground for a specified delay (for 2nd takeoff)

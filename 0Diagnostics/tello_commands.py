@@ -14,7 +14,8 @@ print(tello.get_battery())
 
 # tello.send_control_command("wifi 3B256C telloswarm")      # to set wifi name and PW (TBC name will become "name + 2" ?)
 
-tello.send_control_command("ap SCORPION_B uavlab2025")
+tello.send_control_command("ap Scorpion_A uavlab2025")
+# tello.send_control_command("wifi TAG02 telloswarm")
 
 # print(tello.get_yaw())
 # tello.takeoff()

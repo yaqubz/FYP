@@ -10,7 +10,7 @@ IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream disp
 PI_ID:int = 11   # 0 for LAPTOP_ONLY
 UWBTAG_ID:int = 11
 
-WAYPOINTS_JSON = "forwardback500.json"
+# WAYPOINTS_JSON = "forwardback500.json"
 # WAYPOINTS_JSON = "UWBViz/waypoints_backentrance.json"
 
 FLIGHT_HEIGHT_WAYPOINTS:int = 120
