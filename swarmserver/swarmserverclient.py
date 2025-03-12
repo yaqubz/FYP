@@ -380,7 +380,7 @@ class MarkerServer:
 
     ### SIMUL TAKEOFF FUNCTIONS
 
-    def wait_and_takeoff(self, all_waiting_drones, takeoff_timeout=300, threshold=0.8):
+    def wait_and_takeoff(self, all_waiting_drones, takeoff_timeout=600, threshold=0.8):
         """
         NEW FXN 17 FEB
         Waits for all drones in the waiting list to be ready before sending a takeoff signal.
