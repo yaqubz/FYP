@@ -1,6 +1,9 @@
 """
 Connect to drone for this simple example!
-Run this after running swarmserverclient.py, then observe the GUI.
+
+Alternatively, you may try example_nodrone.py without connecting to a drone.
+
+IMPT: Run this after running swarmserverclient.py, then observe the GUI.
 """
 
 from swarmserverclient import MarkerClient

@@ -1,6 +1,10 @@
 """
-No need to connect to drone!
-Run this AFTER running swarmserverclient.py, then observe the GUI.
+This is just for simulation, and communicates with the server without any actual drone commands - No need to connect to drone for this to work!
+print() statements indicate where to place your drone functions. 
+
+You may try example.py with a real drone.
+
+IMPT: Run this AFTER running swarmserverclient.py, then observe the GUI.
 """
 
 from swarmserverclient import MarkerClient
@@ -11,6 +15,7 @@ status_str = f"Waiting for takeoff. Start Batt %: XXX"
 marker_client = MarkerClient(drone_id=1)
 marker_client.client_takeoff_simul([99], status_message=status_str) # [99] ensures that takeoff is only triggered by the user. Otherwise, put the list of drone_ids you want to takeoff with.
 print("drone.takeoff() here")
+marker_client.send_update('status', status_message='Taking off!')
 time.sleep(2)
 
 print("Simulating waypoint 1 occupied by another drone.")   
