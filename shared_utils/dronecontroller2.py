@@ -297,6 +297,53 @@ class DroneController:
     def get_tof_distance(self):
         with self.forward_tof_lock:
             return self.forward_tof_dist
+        
+    def get_tof_distances_list(self, list_length:int, interval_s:int = 0.6) -> List:
+        """
+        Returns a list of ToF readings; Useful for taking average
+        Does not count 8888 readings
+        Args:
+            list_length: length of list to return
+            interval_s: duration between ToF readings. Should exceed _tof_thread period of 0.5s.
+        """
+        tof_dist_list = []
+        i = 0
+        while i < list_length:
+            with self.forward_tof_lock:
+                current_dist = self.forward_tof_dist
+                if current_dist == 8888:
+                    # Repeat the reading if the distance is 8888
+                    continue
+                tof_dist_list.append(current_dist)
+                i += 1  # Only increment the counter if a valid reading is added
+            time.sleep(interval_s)
+        return tof_dist_list
+    
+    def tof_check_clear(self, tof_dist_list: list, clear_threshold_cm: int = 2000, clear_ratio: float = 0.6) -> bool:
+        """
+        Checks a list of ToF distances to determine if the path is clear of obstacles.
+
+        Args:
+            tof_dist_list: List of ToF readings in cm; Assumes no invalid readings (e.g., 8888).
+            clear_threshold_cm: Distance threshold in cm below which an obstacle is considered detected. Maximum ToF sensing ~ 1.2m
+            clear_ratio: Minimum ratio of readings above the threshold to consider the path clear.
+
+        Returns:
+            bool: True if the path is clear (ratio of clear readings >= clear_ratio), False otherwise.
+        """
+        if not tof_dist_list:
+            # Handle empty list case
+            return False
+
+        # Count the number of readings above the clear threshold
+        clear_readings = sum(1 for reading in tof_dist_list if reading >= clear_threshold_cm)
+
+        # Calculate the ratio of clear readings
+        calculated_ratio = clear_readings / len(tof_dist_list)
+
+        # Determine if the path is clear based on the ratio
+        return calculated_ratio >= clear_ratio
+            
 
     def _tof_thread(self, period_s:float = 0.5):
         """Video streaming thread function"""

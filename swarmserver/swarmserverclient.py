@@ -528,21 +528,25 @@ class MarkerClient:
 
     def client_takeoff_simul(self, drones_list:list, status_message:str = None):
         """
-        5 MAR NEW - remove from DroneController, put here instead!
-        For manual clicking, use drones_list = [99]
+        This is the holding pattern that releases the Client once takeoff_signal is received from server.
+        (caa 13 Mar) Must launch server BEFORE client can register for it to work!
+
+        Args:
+            drones_list: For manual clicking, use drones_list = [99]
         """
-        self.send_takeoff_request(drones_list, status_message=status_message)
+        self._send_takeoff_request(drones_list, status_message=status_message)
         
         while not self.takeoff_signal:      # This is a holding pattern, which releases upon takeoff_signal being set by the server.
             logging.debug(f"Tello {self.drone_id} waiting to take off. takeoff_signal: {self.takeoff_signal}")
-            self.send_takeoff_request(drones_list, status_message=status_message)   # TBC 12 MAR - continue sending takeoff requests, just in case. (will it be too spammy?)
+            self._send_takeoff_request(drones_list, status_message=status_message)   # TBC 12 MAR - continue sending takeoff requests, just in case. (will it be too spammy?)
             time.sleep(0.5)  # Wait for takeoff command
 
         logging.info(f"Tello {self.drone_id} is taking off!")
 
-    def send_takeoff_request(self, waiting_list:list, status_message:str=None):
+    def _send_takeoff_request(self, waiting_list:list, status_message:str=None):
         """
         Notifies the server that this drone is ready for takeoff and is waiting for the specified drones.
+        Internal method; Wouldn't usually call this yourself.
         """
         message = {
             "type": "takeoff_request",
@@ -565,7 +569,7 @@ class MarkerClient:
                     status_message:str='', 
                     send_repeat:int=3):
         """
-        19 Feb - keep separate from send_takeoff_request since it has an additional waiting_list argument
+        19 Feb - keep separate from _send_takeoff_request since it has an additional waiting_list argument
 
                 message is a dictionary: 
                 {"drone_id": 1, "update_type": "marker", "marker": 2, "detected": True}

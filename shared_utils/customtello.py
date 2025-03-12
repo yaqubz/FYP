@@ -233,6 +233,11 @@ class MockTello:
         if self.uwb_sim:
             self.uwb_publisher.update_move_forward(distance)  # Simulate forward movement
 
+    def move_right(self, distance):
+        print(f"Mock: Moving right {distance} cm.")
+        # if self.uwb_sim:
+        #     self.uwb_publisher.update_move_forward(distance)  # Simulate forward movement
+
     def get_mission_pad_id(self):
         print("Mock: No mission pad found.")
         return -1  # Simulates no pad found
@@ -276,12 +281,18 @@ class MockTello:
         """
         rand_num = np.random.beta(2, 8)  # Generates a number between 0 and 1
         delay = 0.3 + rand_num * (7 - 0.3)  # Scale to range [0.3, 7]
-        ext_dist = random.randint(300, 700)  # Simulate external ToF measurement
+        ext_dist = random.randint(700, 1200)  # Simulate external ToF measurement
+        
         if not simulate_delay:
             delay = 0
 
         if delay > 5:  # Simulate invalid reading
             delay = 7
+            ext_dist = 8888
+
+        if ext_dist > 1000:  # Simulates no reading (i.e. clear of obstacles)
+            ext_dist = 8191
+        elif ext_dist > 1150:  # Simulate invalid reading
             ext_dist = 8888
 
         print(f"Mock: Ext ToF = {ext_dist}mm. Simulated response time {delay:.1f}s")

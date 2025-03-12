@@ -25,21 +25,6 @@ import threading
 
 params = load_params()
 
-def tof_update_thread(controller:DroneController, Hz: float = 2):
-    """
-    TBC not exactly working, 6 Feb
-    Subthread for updating forward ToF reading
-    Implemented 3 Feb, works but may block other responses from drone
-    May work better with RPi? 
-    Possible solution: Find optimal refresh rate? Use both subthread AND main thread?
-    
-    """
-    while True:
-        with controller.forward_tof_lock:
-            controller.forward_tof_dist = controller.drone.get_ext_tof()
-        time.sleep(1/Hz)
-        logger.debug(f"controller.forward_tof_dist: {controller.forward_tof_dist}")
-
 def check_marker_server_and_lockon(controller:DroneController, marker_id:int, display_frame) -> bool:
     """
     Logic discussed and settled between Yaqub and Gab
@@ -263,7 +248,8 @@ def navigation_thread(controller:DroneController):
             controller.process_depth_color_map(depth_colormap)
             
             # Get ToF distance
-            tof_dist = controller.forward_tof_dist    # if using tof_thread (commented out 3 Feb)
+            # tof_dist = controller.forward_tof_dist
+            tof_dist = controller.get_tof_distance()        # TESTING TBC 12 MAR
             logger.debug(f"ToF Dist: {tof_dist}")
             cv2.putText(display_frame, f"ToF: {tof_dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
@@ -474,7 +460,7 @@ class HoverOnErrorHandler(logging.Handler):
             # # Optionally send an immediate hover command:     # TBC 12 MAR  - TO VERIFY
             # self.drone.send_rc_control(0, 0, 0, 0)          
 
-def display_loop(controller):
+def display_loop(controller:DroneController):
     window_name = f"Drone View {controller.drone_id}"
     # Explicitly create a named window on the main thread
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
@@ -490,6 +476,66 @@ def display_loop(controller):
             break
         time.sleep(0.03)  # Delay to reduce CPU usage
     cv2.destroyAllWindows()
+
+def custom_tof_navigation(controller: DroneController) -> None:
+    """
+    NEW 12 MAR: Use ToF to help guide. Start pos - Facing straight ahead (North)
+    Ideally, drone's execute_waypoints should end with it facing North, a good distance away from the walls.
+
+    Args:
+        controller: An instance of DroneController with ToF and movement capabilities.
+    """
+    # Constants for movement and rotation
+    MOVE_INCREMENT = 50  # Distance to move in cm
+    LIST_LENGTH = 3
+    MAX_MOVEMENT_COUNT = 3
+
+    # Step 1: Rotate to face West
+    with controller.forward_tof_lock:
+        controller.drone.rotate_counter_clockwise(90)
+    time.sleep(1)  # Allow time for rotation to complete
+
+    # Step 2: Check ToF readings and move right until path is clear
+    tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+    logging.debug(f"Step 1/5: Initial ToF readings (West): {tof_dist_list}")
+
+    movement_count = 0
+    while not controller.tof_check_clear(tof_dist_list) and movement_count < MAX_MOVEMENT_COUNT:
+        with controller.forward_tof_lock:
+            controller.drone.move_right(MOVE_INCREMENT)
+        movement_count += 1        
+        tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+        logging.debug(f"Step 2/5: Moving right; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
+
+    # Step 3: Rotate to face South and move right
+    with controller.forward_tof_lock:
+        controller.drone.rotate_counter_clockwise(90)  # Now facing South
+        controller.drone.move_right(300)  # Move right by 300 cm
+    time.sleep(1)  # Allow time for movement to complete
+
+    # Step 4: Perform additional checks and movements to confirm path is clear
+    tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+    logging.debug(f"Step 3/5: Rotated facing South. ToF readings: {tof_dist_list}")
+
+    clear_count = 0
+    movement_count = 0
+    while clear_count < 3:  # Ensure drone checks clear, moves forward, and checks again
+        while not controller.tof_check_clear(tof_dist_list) and movement_count < MAX_MOVEMENT_COUNT:
+            with controller.forward_tof_lock:
+                controller.drone.move_right(MOVE_INCREMENT)
+            movement_count += 1
+            tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+            logging.debug(f"Step 4a/5: Moving right; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
+
+        with controller.forward_tof_lock:
+            controller.drone.move_forward(20)  # Move forward by 20 cm
+        tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+        if controller.tof_check_clear(tof_dist_list):
+            clear_count += 1
+        logging.debug(f"Step 4b/5: Moved forward 20cm, clear_count = {clear_count}/3, ToF readings: {tof_dist_list}")
+
+    # Step 5: Log completion
+    logging.info("Step 5/5: custom_tof_navigation completed! Drone is ready to enter back entrance.")
 
 def main():
     global DIST_COEFF, logger
@@ -553,9 +599,14 @@ def main():
                 except Exception as e:
                     logging.error(f"Error: {e}. DID NOT SIMULATE WAYPOINTS. Continuing on...")
         
+        controller.start_tof_thread()
+
+        custom_tof_navigation(controller)
+        
+
         # Setup video stream (this starts the _stream_video thread which only updates frames)
         controller.setup_stream()
-        controller.start_tof_thread()
+        
         
         # Start the navigation logic in a separate thread
         nav_thread = threading.Thread(target=navigation_thread, args=(controller,))
