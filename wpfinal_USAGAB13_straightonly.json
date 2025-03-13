@@ -1,0 +1,30 @@
+{
+    "README": "For Drone 13 - back entrance, takeoff #2 (2m offset South from drone 12; just flies straight; to be used with custom_tof_navigation)",
+    "wp": [
+        {
+            "dist_cm": 1440,
+            "dist_px": 455,
+            "angle_deg": 0.0,
+            "position_cm": {
+                "x": 334,
+                "y": 180
+            }
+        },
+        {
+            "dist_cm": 0,
+            "dist_px": 0,
+            "angle_deg": 90, 
+            "position_cm": {
+                "x": 334,
+                "y": 1155
+            }
+        }
+    ],
+    "test_area": {
+        "width_cm": 1500,
+        "height_cm": 1500,
+        "scale_factor": 2.142857142857143
+    },
+    "competition_notice": "This path was planned in a test area. Scale adjustments needed for 20m x 20m competition field.",
+    "datetime": "28 02 18:14"
+}

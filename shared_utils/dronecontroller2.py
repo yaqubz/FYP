@@ -96,26 +96,15 @@ class DroneController:
         self.yaw_speed = 50     # usually 50
         self.forward_tof_dist = 0 # to be updated by subthread
         self.forward_tof_lock = Lock()
-
-        # 18 FEB NEW Searcher Navigation Parameters
-        self.waypoints_executed:List[Dict] = []
-        self.my_current_pos:tuple = (0,0)       # Dead reckoning
-        self.my_current_orientation:float = 0   # Dead reckoning
-        self.my_imu_orientation = 0             
-        self.my_start_pos:tuple = (0,0)     # CAN BE A PARAM
-        self.status:str = None              # should be a property??
-        
         self.target_yaw = None      # TESTING END-JAN - for exit marker (still testing caa 26 Feb)
 
-        # Danger Offset (26 Feb new)
+        # Danger offset parameters
         self.shortest_danger_distance:float = float("inf")  
         self.nearest_danger_id:int = None
         self.nearest_danger_data:dict = None  # stores the data of ONE nearest danger marker closest to valid_marker_info
         self.danger_offset:tuple[int] = (0,0,0)
         self.no_danger_count:int = 0
-
-    # 19 FEB NEW VIDEO HANDLING
-    
+  
     def setup_stream(self):
         start_time = time.time()
         self.drone.streamon()

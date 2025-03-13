@@ -490,6 +490,8 @@ def custom_tof_navigation(controller: DroneController) -> None:
     LIST_LENGTH = 3
     MAX_MOVEMENT_COUNT = 3
 
+    logging.debug(f"Step 0/4: Initial ToF readings (North): {controller.get_tof_distances_list(list_length=LIST_LENGTH)}")
+
     # Step 1: Rotate to face West
     with controller.forward_tof_lock:
         controller.drone.rotate_counter_clockwise(90)
@@ -497,7 +499,7 @@ def custom_tof_navigation(controller: DroneController) -> None:
 
     # Step 2: Check ToF readings and move right until path is clear
     tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
-    logging.debug(f"Step 1/5: Initial ToF readings (West): {tof_dist_list}")
+    logging.debug(f"Step 1a/4: Initial ToF readings (West): {tof_dist_list}")
 
     movement_count = 0
     while not controller.tof_check_clear(tof_dist_list) and movement_count < MAX_MOVEMENT_COUNT:
@@ -505,7 +507,7 @@ def custom_tof_navigation(controller: DroneController) -> None:
             controller.drone.move_right(MOVE_INCREMENT)
         movement_count += 1        
         tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
-        logging.debug(f"Step 2/5: Moving right; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
+        logging.debug(f"Step 1b/4: Moving right; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
 
     # Step 3: Rotate to face South and move right
     with controller.forward_tof_lock:
@@ -515,27 +517,27 @@ def custom_tof_navigation(controller: DroneController) -> None:
 
     # Step 4: Perform additional checks and movements to confirm path is clear
     tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
-    logging.debug(f"Step 3/5: Rotated facing South. ToF readings: {tof_dist_list}")
+    logging.debug(f"Step 2/5: Rotated facing South. ToF readings: {tof_dist_list}")
 
     clear_count = 0
     movement_count = 0
-    while clear_count < 3:  # Ensure drone checks clear, moves forward, and checks again
+    while clear_count < 2:  # Ensure drone checks clear, moves forward, and checks again
         while not controller.tof_check_clear(tof_dist_list) and movement_count < MAX_MOVEMENT_COUNT:
             with controller.forward_tof_lock:
                 controller.drone.move_right(MOVE_INCREMENT)
             movement_count += 1
             tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
-            logging.debug(f"Step 4a/5: Moving right; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
+            logging.debug(f"Step 3a/4: Moving right; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
 
         with controller.forward_tof_lock:
             controller.drone.move_forward(20)  # Move forward by 20 cm
         tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
         if controller.tof_check_clear(tof_dist_list):
             clear_count += 1
-        logging.debug(f"Step 4b/5: Moved forward 20cm, clear_count = {clear_count}/3, ToF readings: {tof_dist_list}")
+        logging.debug(f"Step 3b/4: Moved forward 20cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
 
     # Step 5: Log completion
-    logging.info("Step 5/5: custom_tof_navigation completed! Drone is ready to enter back entrance.")
+    logging.info("Step 4/4: custom_tof_navigation completed! Drone is ready to enter back entrance.")
 
 def main():
     global DIST_COEFF, logger
@@ -600,13 +602,10 @@ def main():
                     logging.error(f"Error: {e}. DID NOT SIMULATE WAYPOINTS. Continuing on...")
         
         controller.start_tof_thread()
-
-        custom_tof_navigation(controller)
+        custom_tof_navigation(controller)       # NEW 13 MAR - TESTING
         
-
         # Setup video stream (this starts the _stream_video thread which only updates frames)
         controller.setup_stream()
-        
         
         # Start the navigation logic in a separate thread
         nav_thread = threading.Thread(target=navigation_thread, args=(controller,))
@@ -632,6 +631,7 @@ def main():
         controller.marker_client.send_update('status', status_message=f'Landed. {end_batt}%')
         controller.is_running = False
         controller.stop_event.set()
+        # controller.shutdown()
         cv2.destroyAllWindows()
         cv2.waitKey(1)
 

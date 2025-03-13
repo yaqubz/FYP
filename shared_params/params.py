@@ -20,8 +20,6 @@ TAKEOFF_HOVER_DELAY:int = 0
 PRE_TAKEOFF_DELAY:int = 0
 
 
-
-
 ### LESS COMMONLY TOUCHED PARAMS ###
 
 import numpy as np

@@ -49,3 +49,4 @@ waypoints_commanded.json
 calib_camera/calibration_images
 *.json
 !waypoints_samplesmall.json
+!*wpfinal*.json

@@ -290,7 +290,7 @@ class MockTello:
             delay = 7
             ext_dist = 8888
 
-        if ext_dist > 1000:  # Simulates no reading (i.e. clear of obstacles)
+        if ext_dist > 700:  # Simulates no reading (i.e. clear of obstacles)
             ext_dist = 8191
         elif ext_dist > 1150:  # Simulate invalid reading
             ext_dist = 8888
