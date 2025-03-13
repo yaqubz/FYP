@@ -442,9 +442,9 @@ class UWBVisualization:
         self.screen.blit(text, (30, 40))
         self.screen.blit(text2, (30, 70))
 
-        # Draw buttons
-        self.button1.draw(self.screen)
-        self.button2.draw(self.screen)
+        # Draw buttons (DISABLED 13 MAR)
+        # self.button1.draw(self.screen)
+        # self.button2.draw(self.screen)
 
         pygame.display.update()
 
