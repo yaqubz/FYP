@@ -2,7 +2,7 @@
     "README": "For Drone 13 - back entrance, takeoff #2 (2m offset South from drone 12; just flies straight; to be used with custom_tof_navigation)",
     "wp": [
         {
-            "dist_cm": 1440,
+            "dist_cm": 1150,
             "dist_px": 455,
             "angle_deg": 0.0,
             "position_cm": {
@@ -13,7 +13,7 @@
         {
             "dist_cm": 0,
             "dist_px": 0,
-            "angle_deg": 90, 
+            "angle_deg": 0, 
             "position_cm": {
                 "x": 334,
                 "y": 1155

@@ -13,7 +13,7 @@ UWBTAG_ID:int = 0
 # WAYPOINTS_JSON = "waypoint_test.json"
 WAYPOINTS_JSON = "UWBViz/waypoints_uwb.json"
 
-FLIGHT_HEIGHT_WAYPOINTS:int = 100
+FLIGHT_HEIGHT_WAYPOINTS:int = 100       # typical default takeoff height = 110
 FLIGHT_HEIGHT_SEARCH:int = 130
 
 TAKEOFF_HOVER_DELAY:int = 0

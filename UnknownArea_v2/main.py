@@ -477,7 +477,83 @@ def display_loop(controller:DroneController):
         time.sleep(0.03)  # Delay to reduce CPU usage
     cv2.destroyAllWindows()
 
-def custom_tof_navigation(controller: DroneController) -> None:
+def custom_tof_navigation_gab(controller: DroneController) -> None:
+    """
+    NEW 12 MAR: Use ToF to help guide. Start pos - Facing straight ahead (North)
+    Ideally, drone's execute_waypoints should end with it facing North, a good distance away from the walls.
+
+    Args:
+        controller: An instance of DroneController with ToF and movement capabilities.
+    """
+    # Constants for movement and rotation
+    MOVE_INCREMENT = 50  # Distance to move in cm
+    LIST_LENGTH = 3
+    MAX_MOVEMENT_COUNT = 6
+
+    logging.debug(f"Step 0/4: Initial ToF readings (North): {controller.get_tof_distances_list(list_length=LIST_LENGTH)}")
+
+    # Step 1: Rotate to face West
+    with controller.forward_tof_lock:
+        controller.drone.rotate_counter_clockwise(90)
+    time.sleep(1)  # Allow time for rotation to complete
+
+    # Step 2: Check ToF readings and move right until path is clear
+    tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+    logging.debug(f"Step 2a/4: Initial ToF readings (West): {tof_dist_list}")
+
+    clear_count = 0
+    movement_count = 0
+    while clear_count < 2:  # Ensure drone checks clear, moves forward, and checks again
+        while not controller.tof_check_clear(tof_dist_list) and movement_count < MAX_MOVEMENT_COUNT:
+            with controller.forward_tof_lock:
+                controller.drone.move_right(MOVE_INCREMENT)
+            movement_count += 1
+            tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+            logging.debug(f"Step 2b/4: Moving right while facing West; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
+
+        with controller.forward_tof_lock:
+            controller.drone.move_forward(30)
+        tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+        if controller.tof_check_clear(tof_dist_list):
+            clear_count += 1
+        else:
+            clear_count -= 1
+        logging.debug(f"Step 2c/4: Moved forward 20cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
+
+    with controller.forward_tof_lock:
+        controller.drone.move_right(50) #   for additional clearance from the wall edge
+        controller.drone.rotate_counter_clockwise(90)
+        controller.drone.move_right(300)
+    logging.debug("Drone now facing south.")
+
+    tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+    logging.debug(f"Step 3a/4: Initial ToF readings (South): {tof_dist_list}")
+
+    clear_count = 0
+    movement_count = 0
+    while clear_count < 1:  # Ensure drone checks clear, moves forward, and checks again
+        while not controller.tof_check_clear(tof_dist_list) and movement_count < MAX_MOVEMENT_COUNT:
+            with controller.forward_tof_lock:
+                controller.drone.move_right(MOVE_INCREMENT)
+            movement_count += 1
+            tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+            logging.debug(f"Step 3b/4: Moving right while facing South; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
+
+        with controller.forward_tof_lock:
+            controller.drone.move_forward(30)
+        tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
+        if controller.tof_check_clear(tof_dist_list):
+            clear_count += 1
+        else:
+            clear_count -= 1
+        logging.debug(f"Step 3c/4: Moved forward 30cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
+
+    controller.drone.move_right(50) # For clearance
+
+    # Step 5: Log completion
+    logging.info("Step 4/4: custom_tof_navigation completed! Drone is ready to enter back entrance.")
+
+def custom_tof_navigation_yz(controller: DroneController) -> None:
     """
     NEW 12 MAR: Use ToF to help guide. Start pos - Facing straight ahead (North)
     Ideally, drone's execute_waypoints should end with it facing North, a good distance away from the walls.
@@ -490,8 +566,6 @@ def custom_tof_navigation(controller: DroneController) -> None:
     LIST_LENGTH = 3
     MAX_MOVEMENT_COUNT = 3
 
-    logging.debug(f"Step 0/4: Initial ToF readings (North): {controller.get_tof_distances_list(list_length=LIST_LENGTH)}")
-
     # Step 1: Rotate to face West
     with controller.forward_tof_lock:
         controller.drone.rotate_counter_clockwise(90)
@@ -499,25 +573,7 @@ def custom_tof_navigation(controller: DroneController) -> None:
 
     # Step 2: Check ToF readings and move right until path is clear
     tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
-    logging.debug(f"Step 1a/4: Initial ToF readings (West): {tof_dist_list}")
-
-    movement_count = 0
-    while not controller.tof_check_clear(tof_dist_list) and movement_count < MAX_MOVEMENT_COUNT:
-        with controller.forward_tof_lock:
-            controller.drone.move_right(MOVE_INCREMENT)
-        movement_count += 1        
-        tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
-        logging.debug(f"Step 1b/4: Moving right; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
-
-    # Step 3: Rotate to face South and move right
-    with controller.forward_tof_lock:
-        controller.drone.rotate_counter_clockwise(90)  # Now facing South
-        controller.drone.move_right(300)  # Move right by 300 cm
-    time.sleep(1)  # Allow time for movement to complete
-
-    # Step 4: Perform additional checks and movements to confirm path is clear
-    tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
-    logging.debug(f"Step 2/5: Rotated facing South. ToF readings: {tof_dist_list}")
+    logging.debug(f"Initial ToF readings (West): {tof_dist_list}")
 
     clear_count = 0
     movement_count = 0
@@ -527,17 +583,21 @@ def custom_tof_navigation(controller: DroneController) -> None:
                 controller.drone.move_right(MOVE_INCREMENT)
             movement_count += 1
             tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
-            logging.debug(f"Step 3a/4: Moving right; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
+            logging.debug(f"Moving right while facing West; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
 
         with controller.forward_tof_lock:
-            controller.drone.move_forward(20)  # Move forward by 20 cm
+            controller.drone.move_forward(30)
         tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
         if controller.tof_check_clear(tof_dist_list):
             clear_count += 1
-        logging.debug(f"Step 3b/4: Moved forward 20cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
+        else:
+            clear_count -= 1
+        logging.debug(f"Step 2c/4: Moved forward 20cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
+
+    controller.drone.move_right(50) # For clearance
 
     # Step 5: Log completion
-    logging.info("Step 4/4: custom_tof_navigation completed! Drone is ready to enter back entrance.")
+    logging.info("Step 4/4: custom_tof_navigation_yz completed! Drone is facing West and ready to enter front entrance.")
 
 def main():
     global DIST_COEFF, logger
@@ -603,6 +663,8 @@ def main():
         
         controller.start_tof_thread()
         custom_tof_navigation(controller)       # NEW 13 MAR - TESTING
+        with controller.forward_tof_lock:
+            controller.drone.move_forward(30)   # to ensure drone is inside Unknown Area, past the Reverse marker
         
         # Setup video stream (this starts the _stream_video thread which only updates frames)
         controller.setup_stream()

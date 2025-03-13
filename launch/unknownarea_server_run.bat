@@ -4,9 +4,9 @@ timeout /t 1 /nobreak
 
 @REM start python -m UnknownArea_v2.main shared_params.params0
 
-start python -m UnknownArea_v2.main shared_params.params11ap
+@REM start python -m UnknownArea_v2.main shared_params.params11ap
 start python -m UnknownArea_v2.main shared_params.params12ap
-start python -m UnknownArea_v2.main shared_params.params13ap
+@REM start python -m UnknownArea_v2.main shared_params.params13ap
 
 
 @REM @REM FOR TESTING CLIENTS REMOTELY - set LAPTOP_ONLY = True
