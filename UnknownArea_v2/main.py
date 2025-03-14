@@ -339,8 +339,8 @@ def navigation_thread(controller:DroneController):
                                 continue        # re-enter the loop; need to re-detect marker and re-measure distance. 
 
                             elif current_distance_2D > 0 and current_distance_2D < 500:
-                                logger.info(f"Final Approach: Moving forward {int(current_distance_2D)}cm to marker.")
-                                controller.drone.move_forward(int(current_distance_2D))
+                                logger.info(f"Final Approach: Moving forward {int(current_distance_2D)-20}cm to marker.")       # hard coded offset caa 14 Mar
+                                controller.drone.move_forward(int(current_distance_2D)-20)
                                 logger.info("Approach complete!")
                                 controller.drone.send_rc_control(0, 0, 0, 0)
                                 # 26 FEB TODO: ADD DOWNWARD FACING / DANGER AVOIDING / VICTIM CENTERING HERE
@@ -385,13 +385,13 @@ def navigation_thread(controller:DroneController):
                 exit_text:str = f"Exit detected {controller.exit_distance_3D:.0f}cm away."
                 logger.info("No valid markers detected. " + exit_text)
                 cv2.putText(display_frame, exit_text, (10, 120), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 0, 0), 2)
-                if not params.NO_FLY and controller.exit_distance_3D < 300:
+                if not params.NO_FLY and controller.exit_distance_3D < 500: # IMPT: changed to 500cm 14 Mar - using 13cm exit markers on 19cm marker_size
                     logger.info(f"Avoiding exit. Turning 90 degrees.")
                     with controller.forward_tof_lock: 
                         controller.drone.rotate_clockwise(90)
 
                 elif not params.NO_FLY:
-                    logger.info(f"Exit more than 3m away, no action taken.")
+                    logger.info(f"Exit more than 5m away, no action taken.")    # hardcoded ish (see above 14 Mar)
                     display_frame = nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
 
             else: # Navigation logic using depth map if neither victim nor exit detected. Simulates well without drone
@@ -521,7 +521,7 @@ def custom_tof_navigation_gab(controller: DroneController) -> None:
         logging.debug(f"Step 2c/4: Moved forward 20cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
 
     with controller.forward_tof_lock:
-        controller.drone.move_right(50) #   for additional clearance from the wall edge
+        controller.drone.move_right(30) #   for additional clearance from the wall edge
         controller.drone.rotate_counter_clockwise(90)
         controller.drone.move_right(300)
     logging.debug("Drone now facing south.")
@@ -541,6 +541,8 @@ def custom_tof_navigation_gab(controller: DroneController) -> None:
 
         with controller.forward_tof_lock:
             controller.drone.move_forward(30)
+            controller.drone.move_right(20)
+            # controller.drone.go_xyz_speed()
         tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
         if controller.tof_check_clear(tof_dist_list):
             clear_count += 1
@@ -548,7 +550,8 @@ def custom_tof_navigation_gab(controller: DroneController) -> None:
             clear_count -= 1
         logging.debug(f"Step 3c/4: Moved forward 30cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
 
-    controller.drone.move_right(50) # For clearance
+    with controller.forward_tof_lock:
+        controller.drone.move_right(50) # For clearance
 
     # Step 5: Log completion
     logging.info("Step 4/4: custom_tof_navigation completed! Drone is ready to enter back entrance.")
@@ -623,7 +626,7 @@ def main():
 
             # After takeoff triggered, chill on the ground for a specified delay (for 2nd takeoff)
             if params.PRE_TAKEOFF_DELAY > 0:
-                msg = f"Takeoff triggered. Starting countdown: {params.PRE_TAKEOFF_DELAY}s"
+                msg = f"{params.PRE_TAKEOFF_DELAY}s countdown triggered."
                 logging.info(msg)
                 controller.marker_client.send_update('status', status_message=msg)
                 time.sleep(params.PRE_TAKEOFF_DELAY)
@@ -662,9 +665,13 @@ def main():
                     logging.error(f"Error: {e}. DID NOT SIMULATE WAYPOINTS. Continuing on...")
         
         controller.start_tof_thread()
-        custom_tof_navigation(controller)       # NEW 13 MAR - TESTING
-        with controller.forward_tof_lock:
-            controller.drone.move_forward(30)   # to ensure drone is inside Unknown Area, past the Reverse marker
+
+        if controller.drone_id == 11 or controller.drone_id == 3:
+            pass
+        else: 
+            custom_tof_navigation_gab(controller)       # NEW 13 MAR - TESTING
+            with controller.forward_tof_lock:
+                controller.drone.move_forward(30)   # to ensure drone is inside Unknown Area, past the Reverse marker
         
         # Setup video stream (this starts the _stream_video thread which only updates frames)
         controller.setup_stream()

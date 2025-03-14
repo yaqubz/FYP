@@ -380,7 +380,7 @@ class DroneController:
         else:
             logging.warning("Trying to shutdown, but already shut down previously.")
 
-    def detect_markers(self, frame, display_frame, marker_size=14.0):
+    def detect_markers(self, frame, display_frame, marker_size=19.0):
         """
         Detect ArUco markers and estimate pose.
         Returns values of the FIRST DETECTED VALID MARKER.
