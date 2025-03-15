@@ -127,10 +127,11 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
                     if response == "ok":
                         success = True
                         logger.info(f"Rotation successful on attempt {attempt}.")
+                        time.sleep(1)  # Small delay once done, enough time to get new ToF reading  # NEW 15 MAR
                         break
                     else:
                         logger.warning(f"Rotation attempt {attempt} failed. Retrying...")
-                    time.sleep(1)  # Small delay before retrying
+                        time.sleep(1)  # Small delay before retrying
 
                 if not success:
                     logger.warning("Rotation command failed after multiple attempts. Executing fallback maneuver.")
@@ -215,6 +216,7 @@ def navigation_thread(controller:DroneController):
     centering_complete = False
     centering_threshold = 15    # in px
     start_time = 0      # to calculate refresh rate
+    time_before_lowering = time.time()    # NEW 15 MAR - to move down 50 cm after
     
     while controller.is_running:  # Main loop continues until marker found or battery low
         #run the stream here
@@ -248,7 +250,7 @@ def navigation_thread(controller:DroneController):
             controller.process_depth_color_map(depth_colormap)
             
             # Get ToF distance
-            # tof_dist = controller.forward_tof_dist
+            # tof_dist = controller.forward_tof_dist        # TESTING TBC 12 MAR
             tof_dist = controller.get_tof_distance()        # TESTING TBC 12 MAR
             logger.debug(f"ToF Dist: {tof_dist}")
             cv2.putText(display_frame, f"ToF: {tof_dist}mm", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
@@ -407,6 +409,16 @@ def navigation_thread(controller:DroneController):
                 with controller.forward_tof_lock:
                     logger.debug(f"Executing nav_with_depthmap_tof.") 
                     display_frame = nav_with_depthmap_tof(controller, tof_dist, display_frame)      # logic for depth map and ToF
+
+                    # NEW 15 MAR (tested ok) - execute down_50 after 180s; Only do so if no marker found, and current flight height is more than 100
+                    current_height = controller.drone.get_height()
+                    logging.debug(f"Time left before lowering: {(time.time() - time_before_lowering):.2f}")
+
+                    if time.time() - time_before_lowering > 120 and current_height >= 100:
+                        logger.info(f"Current search height: {controller.drone.get_height()}. Lowering search height by 50cm.") 
+                        controller.drone.move_down(50)
+                        time_before_lowering = time.time()
+                        logger.info(f"New search height: {controller.drone.get_height()}. Resetting 120s timer.") 
             
             if controller.nearest_danger_id is not None:
                 draw_pose_axes_danger(controller, display_frame)
@@ -540,8 +552,8 @@ def custom_tof_navigation_gab(controller: DroneController) -> None:
             logging.debug(f"Step 3b/4: Moving right while facing South; Count: {movement_count}/{MAX_MOVEMENT_COUNT}, ToF readings: {tof_dist_list}")
 
         with controller.forward_tof_lock:
-            controller.drone.move_forward(30)
-            controller.drone.move_right(20)
+            controller.drone.move_forward(40)       # 15 MAR NEW (OG: 30)
+            controller.drone.move_right(30)         # 15 MAR NEW (OG: 20)
             # controller.drone.go_xyz_speed()
         tof_dist_list = controller.get_tof_distances_list(list_length=LIST_LENGTH)
         if controller.tof_check_clear(tof_dist_list):
@@ -551,7 +563,7 @@ def custom_tof_navigation_gab(controller: DroneController) -> None:
         logging.debug(f"Step 3c/4: Moved forward 30cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
 
     with controller.forward_tof_lock:
-        controller.drone.move_right(50) # For clearance
+        controller.drone.move_right(50) # For final clearance, once no wall detected
 
     # Step 5: Log completion
     logging.info("Step 4/4: custom_tof_navigation completed! Drone is ready to enter back entrance.")
