@@ -657,68 +657,8 @@ def main():
     try:
         with controller.forward_tof_lock:    
             controller.marker_client.client_takeoff_simul([99], status_message=f'Waiting for takeoff. {controller.drone.get_battery()}%')    # just holds the drone until released. still needs takeoff() in the next line 
-            init_yaw = controller.drone.get_yaw()
-
-            # After takeoff triggered, chill on the ground for a specified delay (for 2nd takeoff)
-            if params.PRE_TAKEOFF_DELAY > 0:
-                msg = f"{params.PRE_TAKEOFF_DELAY}s countdown triggered."
-                logging.info(msg)
-                controller.marker_client.send_update('status', status_message=msg)
-                time.sleep(params.PRE_TAKEOFF_DELAY)
-            
-            if not params.NO_FLY:
-                controller.drone.takeoff()
-                logging.info("Taking off for real...")
-            else:
-                logging.info("Simulating taking off for real...")
-
-            controller.marker_client.send_update('status', status_message=f'Taking off. {controller.drone.get_battery()}%')
-            controller.drone.send_rc_control(0, 0, 0, 0)
-            time.sleep(1)
-            post_yaw = controller.drone.get_yaw()
-            yaw_back = post_yaw - init_yaw
-            logging.debug(f"Init yaw: {init_yaw}, Post yaw: {post_yaw}, Normalize: {normalize_angle(yaw_back)}")
-
-            # After taking off for real, hover for a specified delay
-            if params.TAKEOFF_HOVER_DELAY > 0:
-                logging.info(f"Starting {params.TAKEOFF_HOVER_DELAY}s hover")
-                time.sleep(params.TAKEOFF_HOVER_DELAY)        # Hover in position after takeoff
-
-            # Go to specified FLIGHT_HEIGHT_WAYPOINTS and execute waypoints at that flight level
-            if not params.NO_FLY:
-                try:
-                    logging.info(f"Going to initial flight height {params.FLIGHT_HEIGHT_WAYPOINTS}")  
-                    controller.drone.go_to_height_PID(params.FLIGHT_HEIGHT_WAYPOINTS)
-                    logging.info(f"Executing waypoints {params.WAYPOINTS_JSON}")
-                    execute_waypoints(params.WAYPOINTS_JSON, controller.drone, params.NO_FLY)
-                except Exception as e:
-                    logging.error(f"Error: {e}. DID NOT COMPLETE WAYPOINTS. Continuing on...")       # can just comment out WAYPOINTS_JSON in params
-            else:
-                try:
-                    logging.info(f"Simulating executing waypoints {params.WAYPOINTS_JSON}")
-                except Exception as e:
-                    logging.error(f"Error: {e}. DID NOT SIMULATE WAYPOINTS. Continuing on...")
-        
-        controller.start_tof_thread()
-
-        if controller.drone_id == 11 or controller.drone_id == 3:
-            pass
-        else: 
-            custom_tof_navigation_gab(controller)       # NEW 13 MAR - TESTING
-            with controller.forward_tof_lock:
-                controller.drone.move_forward(30)   # to ensure drone is inside Unknown Area, past the Reverse marker
-        
-        # Setup video stream (this starts the _stream_video thread which only updates frames)
-        controller.setup_stream()
-        
-        # Start the navigation logic in a separate thread
-        nav_thread = threading.Thread(target=navigation_thread, args=(controller,))
-        nav_thread.start()
-        
-        # Start the display loop in the main thread
-        display_loop(controller)
-        
-        nav_thread.join()
+            controller.drone.takeoff()
+            controller.drone.move_up(30)
         
     except KeyboardInterrupt:
         logging.info("Keyboard interrupt received.")
@@ -727,15 +667,9 @@ def main():
         logging.error(f"Error in main: {e}. Landing.")
 
     finally:
-        # NEW 17 MAR
-        if not approach_complete:
-            logging.info("Entering custom_danger_avoidance")
-            with controller.forward_tof_lock:
-                custom_danger_avoidance(controller)
-                
         controller.marker_client.send_update('status', status_message='Landing')
         end_batt = controller.drone.get_battery()
-        logger.info(f"Finally: Actually landing for real. End Battery Level: {end_batt}%")
+        logger.info(f"Actually landing for real. End Battery Level: {end_batt}%")
         with controller.forward_tof_lock:
             controller.drone.end()
         controller.marker_client.send_update('status', status_message=f'Landed. {end_batt}%')

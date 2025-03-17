@@ -503,3 +503,48 @@ class DroneController:
 
         self.set_distance(None)
         return False, None, None, None, None
+
+    def detect_danger(self, frame, marker_size=19.0) -> int:
+        """
+        Detect danger markers in the frame and return the ID and distance of the nearest one.
+        
+        :param frame: Camera frame to analyze
+        :param marker_size: Size of the ArUco marker in cm
+        :return: (nearest_danger_id, nearest_danger_distance) 
+                If no danger markers detected, returns (None, 0)
+        """
+        aruco_dict = aruco.getPredefinedDictionary(cv2.aruco.DICT_5X5_250)
+        parameters = aruco.DetectorParameters()
+        corners, ids, rejected = aruco.detectMarkers(frame, aruco_dict, parameters=parameters)
+        
+        # Initialize return values
+        nearest_danger_id = None
+        nearest_danger_distance = float("inf")
+        
+        if ids is not None:
+            detected_ids = ids.flatten()
+            
+            for i, marker_id in enumerate(detected_ids):
+                # Only process danger markers
+                if marker_id in self.danger_ids:
+                    rvecs, tvecs, _ = aruco.estimatePoseSingleMarkers(
+                        corners[i].reshape(1, 4, 2), marker_size, params.CAMERA_MATRIX, params.DIST_COEFF
+                    )
+                    
+                    # Calculate distance
+                    x, y, z = tvecs[0][0]
+                    euclidean_distance = np.sqrt(x*x + y*y + z*z)
+                    
+                    # Update nearest danger marker if this one is closer
+                    if euclidean_distance < nearest_danger_distance:
+                        nearest_danger_distance = euclidean_distance
+                        nearest_danger_id = int(marker_id)
+                        
+                        # Log detection
+                        logging.debug(f"Danger marker detected: ID {nearest_danger_id}, distance {nearest_danger_distance:.2f}")
+        
+        # If no danger marker detected, return (None, 0)
+        if nearest_danger_id is None:
+            return None
+        
+        return int(nearest_danger_distance)
