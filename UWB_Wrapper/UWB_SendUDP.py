@@ -1,4 +1,4 @@
-# 23 Jan Note: For testing purposes, run this script to send mock UWB positions for 3 drones via UDP
+# WORKS 23 Jan: For testing purposes, run this script to send mock UWB positions for 3 drones via UDP. This can then be visualized on UWBViz.
 
 import socket
 import time

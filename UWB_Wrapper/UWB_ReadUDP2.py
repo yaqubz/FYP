@@ -1,4 +1,6 @@
-# BAQIR 9 MAR OKAY
+# BY BAQIR 9 MAR OKAY
+# For reading UWB data from WiFi USB adapter connected to secondary WiFi network.
+# Enables drone control in one WiFi network, while receiving UWB data from a secondary network.
 
 import socket
 import time

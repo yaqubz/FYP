@@ -2,7 +2,9 @@
 Last updated: 4 Mar
 ## Overview
 
-This project is a Drone Path Planner designed for UAV lab testing and field applications. It provides a graphical interface for planning waypoints, marking obstacles, and visualizing flight paths. The software is built using Pygame for rendering and Tkinter for user input handling.
+This module is a Drone Path Planner designed for UAV lab testing and field applications. It provides a graphical interface for planning waypoints, marking obstacles, and visualizing flight paths. The software is built using Pygame for rendering and Tkinter for user input handling.
+
+- **NOTE**: As of 19 Mar 2025, most features in PPGUI have been ported over to UWBViz, as waypoints are now marked directly with UWB tags, rather than through mouse inputs.
 
 ## Features
 

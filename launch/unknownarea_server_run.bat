@@ -1,9 +1,10 @@
+@REM Actual batch script to run for competition
+@REM Launches server, then launches 3 instances of Unknown Area drones with their respective params files.
+
 start python swarmserver/swarmserverclient.py
 
 timeout /t 1 /nobreak
 
-
-@REM @REM ACTUAL FOR COMPETITION
 start python -m UnknownArea_v2.main shared_params.params11ap
 start python -m UnknownArea_v2.main shared_params.params12ap
 start python -m UnknownArea_v2.main shared_params.params13ap
