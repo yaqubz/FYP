@@ -127,11 +127,11 @@ def nav_with_depthmap_tof(controller:DroneController, tof_dist:int, display_fram
                     if response == "ok":
                         success = True
                         logger.info(f"Rotation successful on attempt {attempt}.")
-                        time.sleep(1)  # Small delay once done, enough time to get new ToF reading  # NEW 15 MAR
+                        time.sleep(2)  # Small delay once done, enough time to get new ToF reading  # NEW 15 MAR
                         break
                     else:
                         logger.warning(f"Rotation attempt {attempt} failed. Retrying...")
-                        time.sleep(1)  # Small delay before retrying
+                        time.sleep(2)  # Small delay before retrying
 
                 if not success:
                     logger.warning("Rotation command failed after multiple attempts. Executing fallback maneuver.")
@@ -516,7 +516,7 @@ def custom_tof_navigation_gab(controller: DroneController) -> None:
 
     clear_count = 0
     movement_count = 0
-    while clear_count < 2:  # Ensure drone checks clear, moves forward, and checks again
+    while clear_count < 1:  # Ensure drone checks clear, moves forward, and checks again
         while not controller.tof_check_clear(tof_dist_list) and movement_count < MAX_MOVEMENT_COUNT:
             with controller.forward_tof_lock:
                 controller.drone.move_right(MOVE_INCREMENT)
@@ -530,11 +530,11 @@ def custom_tof_navigation_gab(controller: DroneController) -> None:
         if controller.tof_check_clear(tof_dist_list):
             clear_count += 1
         else:
-            clear_count -= 1
+            clear_count = 0
         logging.debug(f"Step 2c/4: Moved forward 20cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
 
     with controller.forward_tof_lock:
-        controller.drone.move_right(30) #   for additional clearance from the wall edge
+        controller.drone.move_right(40) #   for additional clearance from the wall edge
         controller.drone.rotate_counter_clockwise(90)
         controller.drone.move_right(300)
     logging.debug("Drone now facing south.")
@@ -560,11 +560,11 @@ def custom_tof_navigation_gab(controller: DroneController) -> None:
         if controller.tof_check_clear(tof_dist_list):
             clear_count += 1
         else:
-            clear_count -= 1
+            clear_count = 0
         logging.debug(f"Step 3c/4: Moved forward 30cm, clear_count = {clear_count}/2, ToF readings: {tof_dist_list}")
 
     with controller.forward_tof_lock:
-        controller.drone.move_right(50) # For final clearance, once no wall detected
+        controller.drone.move_right(20) # For final clearance, once no wall detected
 
     # Step 5: Log completion
     logging.info("Step 4/4: custom_tof_navigation completed! Drone is ready to enter back entrance.")
@@ -618,7 +618,7 @@ def custom_tof_navigation_yz(controller: DroneController) -> None:
 
 def custom_danger_avoidance(controller: DroneController):
     """
-    Check for danger markers and navigate accordingly:
+    Just before landing, check for danger markers and navigate accordingly:
     - If a danger marker is detected within 100 units, rotate 90 degrees clockwise and check again
     - If no danger marker is detected within 100 units, move forward 100 units
     
@@ -703,8 +703,12 @@ def main():
 
         if controller.drone_id == 11 or controller.drone_id == 3:
             pass
-        else: 
+        elif controller.drone_id == 12 or controller.drone_id == 13:
             custom_tof_navigation_gab(controller)       # NEW 13 MAR - TESTING
+            with controller.forward_tof_lock:
+                controller.drone.move_forward(30)   # to ensure drone is inside Unknown Area, past the Reverse marker
+        elif controller.drone_id == 17 or controller.drone_id == 18:
+            custom_tof_navigation_yz(controller)       # NEW 13 MAR - TESTING
             with controller.forward_tof_lock:
                 controller.drone.move_forward(30)   # to ensure drone is inside Unknown Area, past the Reverse marker
         

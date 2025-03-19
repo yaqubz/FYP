@@ -7,14 +7,14 @@ LAPTOP_ONLY:bool = False   # indicate LAPTOP_ONLY = True to use MockTello() and 
 NO_FLY:bool = False        # indicate NO_FLY = True to connect to the drone, but ensure it doesn't fly while the video feed still appears
 IMSHOW:bool = True        # indicate IMSHOW = False to disable video stream display (program still works!)
 
-PI_ID:int = 11   # 0 for LAPTOP_ONLY
-UWBTAG_ID:int = 11
+PI_ID:int = 17   # 0 for LAPTOP_ONLY
+UWBTAG_ID:int = 17
 
-# WAYPOINTS_JSON = "forwardback500.json"
-WAYPOINTS_JSON = "wpfinal_USAGAB11_straightonly.json"
+WAYPOINTS_JSON = "wpfinal_USAYZ17_straightonly.json"
+# WAYPOINTS_JSON = "UWBViz/waypoints_backentrance.json"
 
-FLIGHT_HEIGHT_WAYPOINTS:int = 120
-FLIGHT_HEIGHT_SEARCH:int = 120
+FLIGHT_HEIGHT_WAYPOINTS:int = 70
+FLIGHT_HEIGHT_SEARCH:int = 100
 
 TAKEOFF_HOVER_DELAY:int = 0
 PRE_TAKEOFF_DELAY:int = 0
