@@ -4,7 +4,7 @@
 
 ## Overview
 
-This package provides a solution for Obstacle Avoidance. The system is compatible with both Windows and Mac operating systems, but certain steps are specific to each OS. Please follow the instructions based on your setup.
+SIMPLIFIED GITHUB FOR UPLOADING IN FYP REPORT. NOT RELATED/IMPORTANT REFERS TO CODE THAT IS NOT DIRECTLY LINKED TO OBSTACLE AVOIDANCE. 
 
 ## Quick Start Guide
 
