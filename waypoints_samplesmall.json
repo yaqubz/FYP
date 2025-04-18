@@ -1,5 +1,5 @@
 {
-    "README": "USE THIS FOR TESTING - moves forward 30cm",
+    "README": "TESTING - moves forward 30cm",
     "wp": [
         {
             "dist_cm": 30,
