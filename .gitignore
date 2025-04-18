@@ -1,7 +1,7 @@
 # Ignore Python bytecode and pycache directories
 __pycache__/
 *.pyc
-
+#OK
 # Ignore Windows system files
 Thumbs.db
 Desktop.ini
