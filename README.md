@@ -1,10 +1,10 @@
-# UWB Tag Positioning System - README
+#FYP - README
 
 **Last Updated:** 9 Jan 2025
 
 ## Overview
 
-This package provides a solution for waypoint generation, UWB tag positioning, and flight control. The process is fully automated through a single batch file, ensuring easy startup. The system is compatible with both Windows and Mac operating systems, but certain steps are specific to each OS. Please follow the instructions based on your setup.
+This package provides a solution for Obstacle Avoidance. The process is fully automated through a single batch file, ensuring easy startup. The system is compatible with both Windows and Mac operating systems, but certain steps are specific to each OS. Please follow the instructions based on your setup.
 
 ## Quick Start Guide
 
@@ -30,42 +30,6 @@ To start the system from the main directory, simply run the batch file `main_run
 - If you are using a Mac, you will need an additional Windows PC connected to the UWB console to run the `.exe` file.
 - Once both the Windows and Mac PCs are connected to the same network, the Mac can run the rest of the package as usual and access the `.exe`'s published information via UDP.
 
----
-
-## Annex A: UWB Console Setup on Windows
-
-Follow these steps to set up the UWB console on a Windows PC:
-
-1. **Install Serial Drivers**:
-   - Download the serial drivers for Nooploop from [Nooploop Download Page](https://www.nooploop.com/download/), under "Development Support".
-   - Download the `CP210X_Windows` drivers for Windows.
-   
-2. **Unzip the Folder**:
-   - Extract the downloaded ZIP file to a known location on your Windows PC.
-
-3. **Install the Drivers**:
-   - Open **Device Manager** on your Windows PC.
-   - Locate the connected UWB device under **Ports (COM & LPT)**.
-   - Right-click the device and select **Update Driver**.
-   - Choose **Browse my computer for driver software** and navigate to the location where you extracted the driver files.
-   - Select the correct driver and complete the installation.
-
-4. **Find the COM Port Number**:
-   - In **Device Manager**, locate the connected UWB device under **Ports (COM & LPT)**.
-   - Take note of the COM Port number assigned to the device (e.g., COM11).
-   - This COM port number will be required when prompted by the `.exe` during the connection process.
-
----
-
-## Troubleshooting
-
-- **Error: COM Port not found**: Ensure that the UWB device is properly connected and that the correct COM port is selected in the `.exe` prompt.
-- **Connection issues**: Verify that both the Mac and Windows PCs are connected to the same network and that the `.exe` is running on the Windows PC.
-- **'cv2.aruco' has no attribute 'detectMarkers'**: The default `opencv-python` module that is installed with `djitellopy` does not include ArUco. Instead, run:
-```powershell
-pip uninstall opencv-python opencv-contrib-python
-pip install opencv-contrib-python
-```
 
 ## License
 
