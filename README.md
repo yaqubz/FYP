@@ -4,7 +4,7 @@
 
 ## Overview
 
-This package provides a solution for Obstacle Avoidance. The process is fully automated through a single batch file, ensuring easy startup. The system is compatible with both Windows and Mac operating systems, but certain steps are specific to each OS. Please follow the instructions based on your setup.
+This package provides a solution for Obstacle Avoidance. The system is compatible with both Windows and Mac operating systems, but certain steps are specific to each OS. Please follow the instructions based on your setup.
 
 ## Quick Start Guide
 
