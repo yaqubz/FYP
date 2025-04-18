@@ -6,7 +6,7 @@ This module is a Drone Path Planner designed for UAV lab testing and field appli
 
 - **NOTE**: As of 19 Mar 2025, most features in PPGUI have been ported over to UWBViz, as waypoints are now marked directly with UWB tags, rather than through mouse inputs.
 
-## Features
+## Features OK
 
 - **Grid System**: Displays a 1m x 1m scaled grid for reference.
 - **Waypoint Marking**: Allows users to click and set waypoints.
