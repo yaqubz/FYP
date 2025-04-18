@@ -27,3 +27,4 @@
 - customtello takeoff timeout 20s -> 10s    (TBC, hard to recreate - need to observe)
 - swarmserver: is_waypoint_available
 - cannot trigger drone 1 takeoff when it is running for a second time?  
+OK
