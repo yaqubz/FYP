@@ -2,7 +2,7 @@
     "README": "For Drone 12 - back entrance, takeoff #1",
     "wp": [
         {
-            "dist_cm": 1070,
+            "dist_cm": 1050,
             "dist_px": 455,
             "angle_deg": 0.0,
             "position_cm": {
