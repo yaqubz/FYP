@@ -3,7 +3,7 @@ _(updated 30 Jan 2025)_
 This package provides a standalone solution for calibrating the camera of a Tello drone. It is designed to be run from the main directory and supports multiple drones by adjusting filenames based on the drone identifier.
 
 ---
-
+OK
 ## **Steps to Use**
 
 ### 1. **Capture Calibration Images**
