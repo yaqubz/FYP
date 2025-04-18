@@ -2,7 +2,7 @@
     "README": "For Drone 13 - back entrance, takeoff #2 (1m offset from Drone 12)",
     "wp": [
         {
-            "dist_cm": 1170,
+            "dist_cm": 1150,
             "dist_px": 455,
             "angle_deg": 0.0,
             "position_cm": {
