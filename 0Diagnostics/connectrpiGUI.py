@@ -4,7 +4,7 @@ import threading
 import json
 import tkinter as tk
 from tkinter import ttk
-
+#NOT RELATED
 def execute_command(client, command):
     """Helper function to execute a command on the remote server."""
     stdin, stdout, stderr = client.exec_command(command)
