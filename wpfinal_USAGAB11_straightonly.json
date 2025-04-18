@@ -2,7 +2,7 @@
     "README": "For Drone 11 - pillars, takeoff #1 (just flies straight; to be used with custom_tof_navigation",
     "wp": [
         {
-            "dist_cm": 100,
+            "dist_cm": 150,
             "dist_px": 455,
             "angle_deg": 0.0,
             "position_cm": {
