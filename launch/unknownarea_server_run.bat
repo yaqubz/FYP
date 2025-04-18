@@ -14,4 +14,4 @@ start python -m UnknownArea_v2.main shared_params.params13ap
 
 @REM @REM FOR TESTING CLIENTS REMOTELY - set LAPTOP_ONLY = True
 @REM start python -m UnknownArea_v2.main shared_params.params
-@REM start python -m UnknownArea_v2.main shared_params.params3
+@REM start python -m UnknownArea_v2.main shared_params.params17
